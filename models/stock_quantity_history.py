@@ -31,7 +31,7 @@ class ReportStockQuantityExtended(models.Model):
 
     def init(self):
         tools.drop_view_if_exists(self._cr, 'report_stock_quantity')
-        query = '''
+        query = """
             CREATE or REPLACE VIEW report_stock_quantity AS (
                 SELECT
                     MIN(svl.id) AS id,
@@ -68,7 +68,7 @@ class ReportStockQuantityExtended(models.Model):
                 WHERE
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
-                    svl.product_id, svl.company_id, sq.location_id, pt.default_code, pt.name, spl.id, sm.date, po.id, sm.location_id.usage, sm.location_dest_id.usage, svl.unit_cost
+                    svl.product_id, svl.company_id, sq.location_id, pt.default_code, pt.name, spl.id, po.id, sm.location_id.usage, sm.location_dest_id.usage, svl.unit_cost
             )
-        '''
+        """
         self.env.cr.execute(query)
