@@ -37,13 +37,15 @@ class ReportStockQuantityExtended(models.Model):
                     MIN(svl.id) AS id,
                     svl.product_id,
                     svl.company_id,
-                    sq.location_id,
+                    sm.location_id,
+                    sm.location_dest_id,
                     pt.default_code AS product_reference,
                     pt.name AS product_name,
+                    spl.id AS lot_id,
                     MAX(sm.date) AS last_movement_date,
                     CASE
                         WHEN po.id IS NOT NULL THEN 'purchase'
-                        WHEN sm.location_id IS NOT NULL AND sm.location_id.usage = 'internal' AND sm.location_dest_id IS NOT NULL AND sm.location_dest_id.usage = 'internal' THEN 'internal'
+                        WHEN sm.location_id.usage = 'internal' AND sm.location_dest_id.usage = 'internal' THEN 'internal'
                     END AS movement_type,
                     SUM(svl.quantity) AS quantity,
                     svl.unit_cost AS unit_value,
@@ -51,13 +53,13 @@ class ReportStockQuantityExtended(models.Model):
                 FROM
                     stock_valuation_layer svl
                 LEFT JOIN
-                    stock_quant sq ON sq.product_id = svl.product_id
-                LEFT JOIN
                     stock_move sm ON sm.id = svl.stock_move_id
                 LEFT JOIN
                     product_product pp ON pp.id = svl.product_id
                 LEFT JOIN
                     product_template pt ON pt.id = pp.product_tmpl_id
+                LEFT JOIN
+                    stock_production_lot spl ON spl.id = sm.lot_id
                 LEFT JOIN
                     purchase_order_line pol ON pol.id = sm.purchase_line_id
                 LEFT JOIN
@@ -65,8 +67,7 @@ class ReportStockQuantityExtended(models.Model):
                 WHERE
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
-                    svl.product_id, svl.company_id, sq.location_id, pt.default_code, pt.name, po.id, sm.location_id, sm.location_dest_id, svl.unit_cost
+                    svl.product_id, svl.company_id, sm.location_id, sm.location_dest_id, pt.default_code, pt.name, spl.id, po.id, svl.unit_cost
             )
         """
         self.env.cr.execute(query)
-
