@@ -29,7 +29,7 @@ class ReportStockQuantityExtended(models.Model):
     unit_value = fields.Float('Valor Unitario', readonly=True)
     total_value = fields.Float('Valorizado', readonly=True)
 
-    
+
     def init(self):
         tools.drop_view_if_exists(self._cr, 'report_stock_quantity')
         query = """
@@ -45,7 +45,7 @@ class ReportStockQuantityExtended(models.Model):
                     MAX(sm.date) AS last_movement_date,
                     CASE
                         WHEN po.id IS NOT NULL THEN 'purchase'
-                        WHEN sm.location_id IS NOT NULL AND sm.location_dest_id IS NOT NULL AND sm.location_id.usage = 'internal' AND sm.location_dest_id.usage = 'internal' THEN 'internal'
+                        WHEN sm.location_id IS NOT NULL AND sm.location_dest_id IS NOT NULL THEN 'internal'
                     END AS movement_type,
                     SUM(svl.quantity) AS quantity,
                     svl.unit_cost AS unit_value,
