@@ -43,7 +43,7 @@ class ReportStockQuantityExtended(models.Model):
                     MAX(sm.date) AS last_movement_date,
                     CASE
                         WHEN po.id IS NOT NULL THEN 'purchase'
-                        WHEN sm.location_id.usage = 'internal' AND sm.location_dest_id.usage = 'internal' THEN 'internal'
+                        WHEN sm.location_id IS NOT NULL AND sm.location_id.usage = 'internal' AND sm.location_dest_id IS NOT NULL AND sm.location_dest_id.usage = 'internal' THEN 'internal'
                     END AS movement_type,
                     SUM(svl.quantity) AS quantity,
                     svl.unit_cost AS unit_value,
@@ -65,7 +65,7 @@ class ReportStockQuantityExtended(models.Model):
                 WHERE
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
-                    svl.product_id, svl.company_id, sq.location_id, pt.default_code, pt.name, po.id, sm.location_id.usage, sm.location_dest_id.usage, svl.unit_cost
+                    svl.product_id, svl.company_id, sq.location_id, pt.default_code, pt.name, po.id, sm.location_id, sm.location_dest_id, svl.unit_cost
             )
         """
         self.env.cr.execute(query)
