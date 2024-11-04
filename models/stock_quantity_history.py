@@ -38,10 +38,7 @@ class ReportStockQuantityExtended(models.Model):
                     MIN(svl.id) AS id,
                     svl.product_id,
                     svl.company_id,
-                    CASE
-                        WHEN sm.location_id IS NOT NULL THEN sm.location_id
-                        ELSE sq.location_id
-                    END AS location_id,
+                    COALESCE(sm.location_id, sq.location_id) AS location_id,
                     pt.default_code AS product_reference,
                     pt.name AS product_name,
                     MAX(sm.date) AS last_movement_date,
@@ -69,7 +66,7 @@ class ReportStockQuantityExtended(models.Model):
                 WHERE
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
-                    svl.product_id, svl.company_id, sm.location_id, sq.location_id, pt.default_code, pt.name, po.id, svl.unit_cost
+                    svl.product_id, svl.company_id, COALESCE(sm.location_id, sq.location_id), pt.default_code, pt.name, po.id, svl.unit_cost
             )
         """
         self.env.cr.execute(query)
