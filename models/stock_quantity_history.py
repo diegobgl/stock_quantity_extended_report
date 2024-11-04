@@ -47,8 +47,8 @@ class ReportStockQuantityExtended(models.Model):
                         WHEN sm.location_id IS NOT NULL AND sm.location_dest_id IS NOT NULL THEN 'internal'
                     END AS movement_type,
                     SUM(svl.quantity) AS quantity,
-                    svl.unit_cost AS unit_value,
-                    SUM(svl.quantity * svl.unit_cost) AS total_value
+                    COALESCE(svl.unit_cost, 0) AS unit_value,
+                    SUM(svl.quantity * COALESCE(svl.unit_cost, 0)) AS total_value
                 FROM
                     stock_valuation_layer svl
                 LEFT JOIN
@@ -66,7 +66,8 @@ class ReportStockQuantityExtended(models.Model):
                 WHERE
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
-                    svl.product_id, svl.company_id, COALESCE(sm.location_id, sq.location_id), pt.default_code, pt.name, po.id, svl.unit_cost
+                    svl.product_id, svl.company_id, COALESCE(sm.location_id, sq.location_id), 
+                    pt.default_code, pt.name, po.id, svl.unit_cost, sm.location_id, sm.location_dest_id
             )
         """
         self.env.cr.execute(query)
