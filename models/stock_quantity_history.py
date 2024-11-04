@@ -40,7 +40,6 @@ class ReportStockQuantityExtended(models.Model):
                     sq.location_id,
                     pt.default_code AS product_reference,
                     pt.name AS product_name,
-                    spl.id AS lot_id,
                     MAX(sm.date) AS last_movement_date,
                     CASE
                         WHEN po.id IS NOT NULL THEN 'purchase'
@@ -60,15 +59,14 @@ class ReportStockQuantityExtended(models.Model):
                 LEFT JOIN
                     product_template pt ON pt.id = pp.product_tmpl_id
                 LEFT JOIN
-                    stock_production_lot spl ON spl.id = sm.lot_id
-                LEFT JOIN
                     purchase_order_line pol ON pol.id = sm.purchase_line_id
                 LEFT JOIN
                     purchase_order po ON po.id = pol.order_id
                 WHERE
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
-                    svl.product_id, svl.company_id, sq.location_id, pt.default_code, pt.name, spl.id, po.id, sm.location_id.usage, sm.location_dest_id.usage, svl.unit_cost
+                    svl.product_id, svl.company_id, sq.location_id, pt.default_code, pt.name, po.id, sm.location_id.usage, sm.location_dest_id.usage, svl.unit_cost
             )
         """
         self.env.cr.execute(query)
+
