@@ -1,0 +1,31 @@
+<odoo>
+    <record id="view_stock_quantity_history_form_extended" model="ir.ui.view">
+        <field name="name">stock.quantity.history.form.extended</field>
+        <field name="model">stock.quantity.history</field>
+        <field name="inherit_id" ref="stock.view_stock_quantity_history_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group" position="inside">
+                <field name="location_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_report_stock_quantity_tree_extended" model="ir.ui.view">
+        <field name="name">report.stock.quantity.tree.extended</field>
+        <field name="model">report.stock.quantity</field>
+        <field name="inherit_id" ref="stock.view_report_stock_quantity_tree"/>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="location_id"/>
+                <field name="product_reference"/>
+                <field name="product_name"/>
+                <field name="lot_id"/>
+                <field name="last_movement_date"/>
+                <field name="movement_type"/>
+                <field name="quantity"/>
+                <field name="unit_value"/>
+                <field name="total_value"/>
+            </tree>
+        </field>
+    </record>
+</odoo>
