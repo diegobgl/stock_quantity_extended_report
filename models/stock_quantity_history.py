@@ -29,6 +29,7 @@ class ReportStockQuantityExtended(models.Model):
     unit_value = fields.Float('Valor Unitario', readonly=True)
     total_value = fields.Float('Valorizado', readonly=True)
 
+    
     def init(self):
         tools.drop_view_if_exists(self._cr, 'report_stock_quantity')
         query = """
@@ -41,11 +42,10 @@ class ReportStockQuantityExtended(models.Model):
                     sm.location_dest_id,
                     pt.default_code AS product_reference,
                     pt.name AS product_name,
-                    spl.id AS lot_id,
                     MAX(sm.date) AS last_movement_date,
                     CASE
                         WHEN po.id IS NOT NULL THEN 'purchase'
-                        WHEN sm.location_id.usage = 'internal' AND sm.location_dest_id.usage = 'internal' THEN 'internal'
+                        WHEN sm.location_id IS NOT NULL AND sm.location_dest_id IS NOT NULL AND sm.location_id.usage = 'internal' AND sm.location_dest_id.usage = 'internal' THEN 'internal'
                     END AS movement_type,
                     SUM(svl.quantity) AS quantity,
                     svl.unit_cost AS unit_value,
@@ -59,15 +59,13 @@ class ReportStockQuantityExtended(models.Model):
                 LEFT JOIN
                     product_template pt ON pt.id = pp.product_tmpl_id
                 LEFT JOIN
-                    stock_production_lot spl ON spl.id = sm.lot_id
-                LEFT JOIN
                     purchase_order_line pol ON pol.id = sm.purchase_line_id
                 LEFT JOIN
                     purchase_order po ON po.id = pol.order_id
                 WHERE
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
-                    svl.product_id, svl.company_id, sm.location_id, sm.location_dest_id, pt.default_code, pt.name, spl.id, po.id, svl.unit_cost
+                    svl.product_id, svl.company_id, sm.location_id, sm.location_dest_id, pt.default_code, pt.name, po.id, svl.unit_cost
             )
         """
         self.env.cr.execute(query)
