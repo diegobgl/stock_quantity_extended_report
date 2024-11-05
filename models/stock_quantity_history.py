@@ -1,20 +1,23 @@
-from odoo import models, fields, tools
+from odoo import models, fields, api, tools
 
 class StockQuantityHistoryExtended(models.TransientModel):
     _inherit = 'stock.quantity.history'
 
-    location_id = fields.Many2one('stock.location', string="Ubicación", domain="[('usage', 'in', ['internal', 'transit'])]")
+    location_id = fields.Many2one(
+        'stock.location', 
+        string="Ubicación", 
+        domain="[('usage', 'in', ['internal', 'transit'])]"
+    )
 
     def open_at_date(self):
         # Llamamos al método original
         result = super(StockQuantityHistoryExtended, self).open_at_date()
-        
+
         # Extendemos el contexto para incluir el campo de ubicación si está especificada
         if self.location_id:
             result['context'] = dict(result.get('context', {}), location_id=self.location_id.id)
 
         return result
-
 
 class ReportStockQuantityExtended(models.Model):
     _inherit = 'report.stock.quantity'
@@ -29,11 +32,11 @@ class ReportStockQuantityExtended(models.Model):
     unit_value = fields.Float('Valor Unitario', readonly=True)
     total_value = fields.Float('Valorizado', readonly=True)
 
-
+    @api.model_cr
     def init(self):
-        tools.drop_view_if_exists(self._cr, 'report_stock_quantity')
+        tools.drop_view_if_exists(self._cr, 'report_stock_quantity_extended')
         query = """
-            CREATE or REPLACE VIEW report_stock_quantity AS (
+            CREATE or REPLACE VIEW report_stock_quantity_extended AS (
                 SELECT
                     MIN(svl.id) AS id,
                     svl.product_id,
@@ -47,8 +50,8 @@ class ReportStockQuantityExtended(models.Model):
                         WHEN sm.location_id IS NOT NULL AND sm.location_dest_id IS NOT NULL THEN 'internal'
                     END AS movement_type,
                     SUM(svl.quantity) AS quantity,
-                    COALESCE(svl.unit_cost, 0) AS unit_value,
-                    SUM(svl.quantity * COALESCE(svl.unit_cost, 0)) AS total_value
+                    svl.unit_cost AS unit_value,
+                    SUM(svl.quantity * svl.unit_cost) AS total_value
                 FROM
                     stock_valuation_layer svl
                 LEFT JOIN
@@ -67,7 +70,7 @@ class ReportStockQuantityExtended(models.Model):
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
                     svl.product_id, svl.company_id, COALESCE(sm.location_id, sq.location_id), 
-                    pt.default_code, pt.name, po.id, svl.unit_cost, sm.location_id, sm.location_dest_id
+                    pt.default_code, pt.name, po.id, svl.unit_cost
             )
         """
         self.env.cr.execute(query)
