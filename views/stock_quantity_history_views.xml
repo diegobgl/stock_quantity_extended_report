@@ -6,7 +6,7 @@
         <field name="arch" type="xml">
             <xpath expr="//tree" position="inside">
                 <field name="location_id"/>
-                <field name="product_id"/>
+                <field name="name"/>
                 <field name="quantity"/>
                 <field name="reserved_quantity"/>
                 <field name="in_date"/>
