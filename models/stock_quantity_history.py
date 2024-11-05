@@ -6,32 +6,28 @@ class StockQuantityHistoryExtended(models.TransientModel):
     location_id = fields.Many2one('stock.location', string="Ubicación", domain="[('usage', 'in', ['internal', 'transit'])]")
 
     def open_at_date(self):
+        # Detectar el modelo activo en el contexto
         active_model = self.env.context.get('active_model')
-        if active_model == 'stock.valuation.layer':
-            action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
-
-            # Obtener vistas
-            tree_view = self.env.ref('stock_account.stock_valuation_layer_valuation_at_date_tree_inherited', raise_if_not_found=False)
-            graph_view = self.env.ref('stock_account.stock_valuation_layer_graph', raise_if_not_found=False)
-
-            # Configuración de vistas en la acción
-            action['views'] = [
-                (tree_view.id if tree_view else False, 'tree'),
-                (self.env.ref('stock_account.stock_valuation_layer_form').id, 'form'),
-                (self.env.ref('stock_account.stock_valuation_layer_pivot').id, 'pivot'),
-                (graph_view.id if graph_view else False, 'graph')
-            ]
-
-            # Configuración del dominio
-            domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
+        
+        # Verificar si el modelo activo es `stock.quant` en lugar de `stock.valuation.layer`
+        if active_model == 'stock.quant':
+            # Configurar la acción para mostrar la vista de inventario de stock a la fecha
+            action = self.env["ir.actions.actions"]._for_xml_id("stock.view_stock_quant_tree")
+            
+            # Agregar filtro de fecha y tipo de producto
+            domain = [('in_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
+            
+            # Incluir `location_id` en el filtro si se especifica
             if self.location_id:
                 domain.append(('location_id', '=', self.location_id.id))
 
+            # Configurar el dominio y contexto de la acción
             action['domain'] = domain
-            action['display_name'] = format_datetime(self.env, self.inventory_datetime)
+            action['display_name'] = f"Inventario a la fecha {format_datetime(self.env, self.inventory_datetime)}"
             action['context'] = "{}"
             return action
-
+        
+        # Si no es `stock.quant`, usar el comportamiento original para `stock.valuation.layer`
         return super(StockQuantityHistoryExtended, self).open_at_date()
 
 

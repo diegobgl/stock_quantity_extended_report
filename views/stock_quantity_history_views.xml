@@ -1,39 +1,15 @@
 <odoo>
-    <record id="view_report_stock_quantity_tree_extended" model="ir.ui.view">
-        <field name="name">report.stock.quantity.tree.extended</field>
-        <field name="model">report.stock.quantity</field>
-        <field name="arch" type="xml">
-            <tree>
-                <field name="location_id"/>
-                <field name="product_reference"/>
-                <field name="product_name"/>
-                <field name="last_movement_date"/>
-                <field name="movement_type"/>
-                <field name="quantity"/>
-                <field name="unit_value"/>
-                <field name="total_value"/>
-            </tree>
-        </field>
-    </record>
-
-    <record id="view_stock_product_tree_extended" model="ir.ui.view">
-        <field name="name">view.stock.product.tree.extended</field>
-        <field name="model">product.product</field>
-        <field name="inherit_id" ref="stock.view_stock_product_tree"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='qty_available']" position="after">
-                <field name="virtual_available" string="Pronosticado" invisible="type != 'product'" optional="show" decoration-danger="virtual_available &lt; 0" decoration-warning="virtual_available == 0"/>
-            </xpath>
-        </field>
-    </record>
-
-    <record id="view_stock_valuation_layer_tree_extended" model="ir.ui.view">
-        <field name="name">stock.valuation.layer.tree.extended</field>
-        <field name="model">stock.valuation.layer</field>
-        <field name="inherit_id" ref="stock_account.stock_valuation_layer_tree"/>
+    <record id="view_stock_quant_tree_inventario_a_fecha" model="ir.ui.view">
+        <field name="name">Inventario a Fecha</field>
+        <field name="model">stock.quant</field>
+        <field name="inherit_id" ref="stock.view_stock_quant_tree"/>
         <field name="arch" type="xml">
             <xpath expr="//tree" position="inside">
                 <field name="location_id"/>
+                <field name="product_id"/>
+                <field name="quantity"/>
+                <field name="reserved_quantity"/>
+                <field name="in_date"/>
             </xpath>
         </field>
     </record>
