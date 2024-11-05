@@ -19,6 +19,7 @@ class StockQuantityHistoryExtended(models.TransientModel):
 
         return result
 
+
 class ReportStockQuantityExtended(models.Model):
     _inherit = 'report.stock.quantity'
 
@@ -69,7 +70,7 @@ class ReportStockQuantityExtended(models.Model):
                     svl.create_date <= (now() at time zone 'utc')::date
                 GROUP BY
                     svl.product_id, svl.company_id, COALESCE(sm.location_id, sq.location_id), 
-                    pt.default_code, pt.name, po.id, svl.unit_cost
+                    pt.default_code, pt.name, po.id, svl.unit_cost, sm.location_id, sm.location_dest_id
             )
         """
         self.env.cr.execute(query)
