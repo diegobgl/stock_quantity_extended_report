@@ -1,7 +1,7 @@
 <odoo>
     <record id="view_stock_quant_tree_inventario_a_fecha" model="ir.ui.view">
         <field name="name">Inventario a Fecha</field>
-        <field name="model">product.product</field>
+        <field name="model">stock.quant</field>
         <field name="inherit_id" ref="stock.view_stock_product_tree"/>
         <field name="arch" type="xml">
             <xpath expr="//tree" position="inside">
