@@ -32,7 +32,6 @@ class ReportStockQuantityExtended(models.Model):
     unit_value = fields.Float('Valor Unitario', readonly=True)
     total_value = fields.Float('Valorizado', readonly=True)
 
-    @api.model_cr
     def init(self):
         tools.drop_view_if_exists(self._cr, 'report_stock_quantity_extended')
         query = """
