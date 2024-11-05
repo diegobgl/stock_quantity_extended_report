@@ -3,21 +3,37 @@ from odoo import models, fields, api, tools
 class StockQuantityHistoryExtended(models.TransientModel):
     _inherit = 'stock.quantity.history'
 
-    location_id = fields.Many2one(
-        'stock.location', 
-        string="Ubicación", 
-        domain="[('usage', 'in', ['internal', 'transit'])]"
-    )
+    location_id = fields.Many2one('stock.location', string="Ubicación", domain="[('usage', 'in', ['internal', 'transit'])]")
 
     def open_at_date(self):
-        # Llamamos al método original
-        result = super(StockQuantityHistoryExtended, self).open_at_date()
+        active_model = self.env.context.get('active_model')
+        if active_model == 'stock.valuation.layer':
+            action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
 
-        # Extendemos el contexto para incluir el campo de ubicación si está especificada
-        if self.location_id:
-            result['context'] = dict(result.get('context', {}), location_id=self.location_id.id)
+            # Obtener vistas
+            tree_view = self.env.ref('stock_account.stock_valuation_layer_valuation_at_date_tree_inherited', raise_if_not_found=False)
+            graph_view = self.env.ref('stock_account.stock_valuation_layer_graph', raise_if_not_found=False)
 
-        return result
+            # Configuración de vistas en la acción
+            action['views'] = [
+                (tree_view.id if tree_view else False, 'tree'),
+                (self.env.ref('stock_account.stock_valuation_layer_form').id, 'form'),
+                (self.env.ref('stock_account.stock_valuation_layer_pivot').id, 'pivot'),
+                (graph_view.id if graph_view else False, 'graph')
+            ]
+
+            # Configuración del dominio
+            domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
+            if self.location_id:
+                domain.append(('location_id', '=', self.location_id.id))
+
+            action['domain'] = domain
+            action['display_name'] = format_datetime(self.env, self.inventory_datetime)
+            action['context'] = "{}"
+            return action
+
+        return super(StockQuantityHistoryExtended, self).open_at_date()
+
 
 
 class ReportStockQuantityExtended(models.Model):
@@ -74,3 +90,17 @@ class ReportStockQuantityExtended(models.Model):
             )
         """
         self.env.cr.execute(query)
+
+class StockValuationLayer(models.Model):
+    _inherit = 'stock.valuation.layer'
+
+    location_id = fields.Many2one('stock.location', string="Location", compute='_compute_location_id', store=True)
+
+    @api.depends('stock_move_id')
+    def _compute_location_id(self):
+        for svl in self:
+            if svl.stock_move_id:
+                svl.location_id = svl.stock_move_id.location_id
+            else:
+                svl.location_id = False
+
