@@ -47,17 +47,17 @@ class StockQuantityHistory(models.TransientModel):
         return action
     
 
-    class ProductProduct(models.Model):
-        _inherit = 'product.product'
+class ProductProduct(models.Model):
+    _inherit = 'product.product'
 
-        location_id = fields.Many2one(
-            'stock.location', string='Location',
-            compute='_compute_location_id', store=False
-        )
+    location_id = fields.Many2one(
+        'stock.location', string='Location',
+        compute='_compute_location_id', store=False
+    )
 
-        def _compute_location_id(self):
-            for product in self:
-                # Busca la ubicación asociada al producto en el modelo `stock.quant`
-                stock_quant = self.env['stock.quant'].search([('product_id', '=', product.id)], limit=1)
-                product.location_id = stock_quant.location_id if stock_quant else False
+    def _compute_location_id(self):
+        for product in self:
+            # Busca la ubicación asociada al producto en el modelo `stock.quant`
+            stock_quant = self.env['stock.quant'].search([('product_id', '=', product.id)], limit=1)
+            product.location_id = stock_quant.location_id if stock_quant else False
 
