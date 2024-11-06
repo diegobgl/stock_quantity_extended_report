@@ -129,16 +129,20 @@ class StockQuant(models.Model):
 
     def _compute_weighted_average_price(self):
         for quant in self:
-            # Calcular el precio promedio ponderado basado en los movimientos hasta la fecha seleccionada
             product = quant.product_id
+
+            # Inicializar variables para el cálculo del precio promedio ponderado
+            total_value = 0.0
+            total_quantity = 0.0
+
+            # Buscar movimientos de stock hasta la fecha actual
             moves = self.env['stock.move'].search([
                 ('product_id', '=', product.id),
                 ('state', '=', 'done'),
                 ('date', '<=', fields.Datetime.now())  # Ajustamos para calcular hasta la fecha actual
             ])
-            total_value = 0.0
-            total_quantity = 0.0
 
+            # Calcular el valor y cantidad total de los movimientos
             for move in moves:
                 if move.picking_type_id.code == 'incoming':  # Compras o entradas
                     total_value += move.price_unit * move.product_qty
@@ -146,16 +150,18 @@ class StockQuant(models.Model):
                 elif move.picking_type_id.code == 'outgoing':  # Salidas o ventas
                     total_quantity -= move.product_qty
 
+            # Determinar el precio promedio ponderado
             if total_quantity > 0:
                 quant.weighted_average_price = total_value / total_quantity
             else:
-                # Si no hay cantidad disponible para calcular el promedio, usar el precio estándar del producto
-                quant.weighted_average_price = product.standard_price
+                # Si no hay movimientos relevantes, usar el precio estándar del producto
+                quant.weighted_average_price = product.standard_price if product.standard_price > 0 else 0.0
 
     def _compute_valuation_value(self):
         for quant in self:
-            # Valorización = Cantidad Disponible * Precio Unitario
-            quant.valuation_value = quant.quantity * quant.weighted_average_price
+            # Asegurarse de que el precio unitario no sea cero antes de calcular la valorización
+            price_unit = quant.weighted_average_price if quant.weighted_average_price > 0 else quant.product_id.standard_price
+            quant.valuation_value = quant.quantity * price_unit
 
     def _compute_account_valuation(self):
         for quant in self:
