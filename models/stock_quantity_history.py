@@ -1,102 +1,63 @@
-from odoo import models, fields, api, tools
+from odoo import models, fields, api
+from odoo.tools.misc import format_datetime
+from odoo.osv import expression
 
-class StockQuantityHistoryExtended(models.TransientModel):
+class StockQuantityHistory(models.TransientModel):
     _inherit = 'stock.quantity.history'
 
-    location_id = fields.Many2one('stock.location', string="Ubicación", domain="[('usage', 'in', ['internal', 'transit'])]")
-
     def open_at_date(self):
-        # Detectar el modelo activo en el contexto
-        active_model = self.env.context.get('active_model')
-        
-        # Verificar si el modelo activo es `stock.quant` en lugar de `stock.valuation.layer`
-        if active_model == 'stock.quant':
-            # Configurar la acción para mostrar la vista de inventario de stock a la fecha
-            action = self.env["ir.actions.actions"]._for_xml_id("stock.view_stock_quant_tree")
-            
-            # Agregar filtro de fecha y tipo de producto
-            domain = [('in_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
-            
-            # Incluir `location_id` en el filtro si se especifica
-            if self.location_id:
-                domain.append(('location_id', '=', self.location_id.id))
-
-            # Configurar el dominio y contexto de la acción
-            action['domain'] = domain
-            action['display_name'] = f"Inventario a la fecha {format_datetime(self.env, self.inventory_datetime)}"
-            action['context'] = "{}"
-            return action
-        
-        # Si no es `stock.quant`, usar el comportamiento original para `stock.valuation.layer`
-        return super(StockQuantityHistoryExtended, self).open_at_date()
-
-
-
-class ReportStockQuantityExtended(models.Model):
-    _inherit = 'report.stock.quantity'
-
-    location_id = fields.Many2one('stock.location', string='Ubicación', readonly=True)
-    product_reference = fields.Char(string='Referencia Interna', readonly=True)
-    product_name = fields.Char(string='Nombre de Producto', readonly=True)
-    lot_id = fields.Many2one('stock.production.lot', string='Lote/Número de Serie', readonly=True)
-    last_movement_date = fields.Datetime(string='Fecha Último Movimiento', readonly=True)
-    movement_type = fields.Selection([('purchase', 'Compra'), ('internal', 'Transferencia Interna')], string='Tipo Movimiento', readonly=True)
-    quantity = fields.Float('Cantidad', readonly=True)
-    unit_value = fields.Float('Valor Unitario', readonly=True)
-    total_value = fields.Float('Valorizado', readonly=True)
-
-    def init(self):
-        tools.drop_view_if_exists(self._cr, 'report_stock_quantity_extended')
-        query = """
-            CREATE or REPLACE VIEW report_stock_quantity_extended AS (
-                SELECT
-                    MIN(svl.id) AS id,
-                    svl.product_id,
-                    svl.company_id,
-                    COALESCE(sm.location_id, sq.location_id) AS location_id,
-                    pt.default_code AS product_reference,
-                    pt.name AS product_name,
-                    MAX(sm.date) AS last_movement_date,
-                    CASE
-                        WHEN po.id IS NOT NULL THEN 'purchase'
-                        WHEN sm.location_id IS NOT NULL AND sm.location_dest_id IS NOT NULL THEN 'internal'
-                    END AS movement_type,
-                    SUM(svl.quantity) AS quantity,
-                    svl.unit_cost AS unit_value,
-                    SUM(svl.quantity * svl.unit_cost) AS total_value
-                FROM
-                    stock_valuation_layer svl
-                LEFT JOIN
-                    stock_quant sq ON sq.product_id = svl.product_id
-                LEFT JOIN
-                    stock_move sm ON sm.id = svl.stock_move_id
-                LEFT JOIN
-                    product_product pp ON pp.id = svl.product_id
-                LEFT JOIN
-                    product_template pt ON pt.id = pp.product_tmpl_id
-                LEFT JOIN
-                    purchase_order_line pol ON pol.id = sm.purchase_line_id
-                LEFT JOIN
-                    purchase_order po ON po.id = pol.order_id
-                WHERE
-                    svl.create_date <= (now() at time zone 'utc')::date
-                GROUP BY
-                    svl.product_id, svl.company_id, COALESCE(sm.location_id, sq.location_id), 
-                    pt.default_code, pt.name, po.id, svl.unit_cost, sm.location_id, sm.location_dest_id
-            )
         """
-        self.env.cr.execute(query)
+        Extiende el método para incluir el campo de ubicación (`location_id`)
+        en la visualización de los productos a una fecha específica.
+        """
+        # Llamar al método original para mantener la lógica base
+        tree_view_id = self.env.ref('stock.view_stock_product_tree').id
+        form_view_id = self.env.ref('stock.product_form_view_procurement_button').id
+        domain = [('type', '=', 'product')]
 
-class StockValuationLayer(models.Model):
-    _inherit = 'stock.valuation.layer'
+        # Usar contexto para manejar productos específicos
+        product_id = self.env.context.get('product_id', False)
+        product_tmpl_id = self.env.context.get('product_tmpl_id', False)
 
-    location_id = fields.Many2one('stock.location', string="Location", compute='_compute_location_id', store=True)
+        if product_id:
+            domain = expression.AND([domain, [('id', '=', product_id)]])
+        elif product_tmpl_id:
+            domain = expression.AND([domain, [('product_tmpl_id', '=', product_tmpl_id)]])
 
-    @api.depends('stock_move_id')
-    def _compute_location_id(self):
-        for svl in self:
-            if svl.stock_move_id:
-                svl.location_id = svl.stock_move_id.location_id
-            else:
-                svl.location_id = False
+        # Aquí definimos la lógica para extender la vista con la información de ubicación
+        action = {
+            'type': 'ir.actions.act_window',
+            'views': [(tree_view_id, 'tree'), (form_view_id, 'form')],
+            'view_mode': 'tree,form',
+            'name': _('Products'),
+            'res_model': 'product.product',
+            'domain': domain,
+            'context': dict(self.env.context, to_date=self.inventory_datetime),
+            'display_name': format_datetime(self.env, self.inventory_datetime)
+        }
+
+        # Modificación para incluir `location_id` utilizando stock.quant
+        product_quant = self.env['stock.quant'].search([('product_id', 'in', product_id)])
+        # Puedes filtrar las ubicaciones específicas si es necesario, aquí se muestra el primer resultado
+        if product_quant:
+            action['context'].update({
+                'location_id': product_quant.location_id.id,
+            })
+
+        return action
+    
+
+    class ProductProduct(models.Model):
+        _inherit = 'product.product'
+
+        location_id = fields.Many2one(
+            'stock.location', string='Location',
+            compute='_compute_location_id', store=False
+        )
+
+        def _compute_location_id(self):
+            for product in self:
+                # Busca la ubicación asociada al producto en el modelo `stock.quant`
+                stock_quant = self.env['stock.quant'].search([('product_id', '=', product.id)], limit=1)
+                product.location_id = stock_quant.location_id if stock_quant else False
 
