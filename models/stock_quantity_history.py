@@ -150,12 +150,15 @@ class StockQuant(models.Model):
                 elif move.picking_type_id.code == 'outgoing':  # Salidas o ventas
                     total_quantity -= move.product_qty
 
-            # Determinar el precio promedio ponderado
+            # Determinar el precio promedio ponderado o usar el standard_price si no hay datos suficientes
             if total_quantity > 0:
                 quant.weighted_average_price = total_value / total_quantity
             else:
-                # Si no hay movimientos relevantes, usar el precio estándar del producto
-                quant.weighted_average_price = product.standard_price if product.standard_price > 0 else 0.0
+                quant.weighted_average_price = product.standard_price
+
+            # Fallback adicional para asegurar que siempre hay un valor
+            if quant.weighted_average_price <= 0 and product.standard_price > 0:
+                quant.weighted_average_price = product.standard_price
 
     def _compute_valuation_value(self):
         for quant in self:
