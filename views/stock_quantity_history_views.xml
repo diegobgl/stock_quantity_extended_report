@@ -33,6 +33,7 @@
                 <field name="last_move_date"/>
                 <field name="move_type"/>
                 <field name="valuation_value"/>
+                <field name="account_valuation_id" string="Cuenta Contable de Valorización"/>
             </xpath>
         </field>
     </record>

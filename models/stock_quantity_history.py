@@ -82,6 +82,7 @@ class ProductProduct(models.Model):
 
 
 
+
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
 
@@ -99,6 +100,11 @@ class StockQuant(models.Model):
     valuation_value = fields.Float(
         string='Valorizado',
         compute='_compute_valuation_value', store=False
+    )
+
+    account_valuation_id = fields.Many2one(
+        'account.account', string='Cuenta Contable de Valorización',
+        compute='_compute_account_valuation', store=False
     )
 
     def _compute_last_move_info(self):
@@ -120,3 +126,8 @@ class StockQuant(models.Model):
         for quant in self:
             # Valorización = Cantidad * Costo Unitario (standard_price)
             quant.valuation_value = quant.quantity * quant.product_id.standard_price
+
+    def _compute_account_valuation(self):
+        for quant in self:
+            # Obtener la cuenta contable de valorización desde la categoría del producto
+            quant.account_valuation_id = quant.product_id.categ_id.property_stock_valuation_account_id
