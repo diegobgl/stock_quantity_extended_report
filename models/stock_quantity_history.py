@@ -128,6 +128,7 @@ class StockQuant(models.Model):
                 quant.move_type = False
 
     def _compute_weighted_average_price(self):
+        to_date = self.env.context.get('to_date')
         for quant in self:
             product = quant.product_id
 
@@ -135,20 +136,28 @@ class StockQuant(models.Model):
             total_value = 0.0
             total_quantity = 0.0
 
-            # Buscar movimientos de stock hasta la fecha actual
-            moves = self.env['stock.move'].search([
+            # Ajustar la búsqueda de movimientos para que respete la fecha 'to_date'
+            domain = [
                 ('product_id', '=', product.id),
                 ('state', '=', 'done'),
-                ('date', '<=', fields.Datetime.now())  # Ajustamos para calcular hasta la fecha actual
-            ])
+            ]
+            if to_date:
+                domain.append(('date', '<=', to_date))  # Limitar la búsqueda hasta la fecha proporcionada
 
-            # Calcular el valor y cantidad total de los movimientos
+            # Buscar movimientos de stock hasta la fecha especificada en el contexto
+            moves = self.env['stock.move'].search(domain)
+
+            # Calcular el valor y cantidad total de los movimientos, incluyendo ajustes iniciales
             for move in moves:
-                if move.picking_type_id.code == 'incoming':  # Compras o entradas
+                if move.picking_type_id.code in ['incoming', 'inventory']:  # Compras o ajustes de inventario
                     total_value += move.price_unit * move.product_qty
                     total_quantity += move.product_qty
                 elif move.picking_type_id.code == 'outgoing':  # Salidas o ventas
                     total_quantity -= move.product_qty
+
+                # Asegurarse de que la cantidad nunca sea negativa
+                if total_quantity < 0:
+                    total_quantity = 0
 
             # Determinar el precio promedio ponderado o usar el standard_price si no hay datos suficientes
             if total_quantity > 0:
@@ -164,7 +173,7 @@ class StockQuant(models.Model):
         for quant in self:
             # Asegurarse de que el precio unitario no sea cero antes de calcular la valorización
             price_unit = quant.weighted_average_price if quant.weighted_average_price > 0 else quant.product_id.standard_price
-            quant.valuation_value = quant.quantity * price_unit
+            quant.valuation_value = max(quant.quantity, 0) * price_unit  # Asegurarse de que la cantidad no sea negativa
 
     def _compute_account_valuation(self):
         for quant in self:
