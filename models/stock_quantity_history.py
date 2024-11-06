@@ -80,3 +80,43 @@ class ProductProduct(models.Model):
             # Valorización = Cantidad * Costo Unitario
             product.valuation_value = quantity * product.standard_price
 
+from odoo import models, fields, api
+
+class StockQuant(models.Model):
+    _inherit = 'stock.quant'
+
+    last_move_date = fields.Datetime(
+        string='Fecha Último Movimiento',
+        compute='_compute_last_move_info', store=False
+    )
+
+    move_type = fields.Selection(
+        [('purchase', 'Compra'), ('internal', 'Transferencia Interna')],
+        string='Tipo Movimiento',
+        compute='_compute_last_move_info', store=False
+    )
+
+    valuation_value = fields.Float(
+        string='Valorizado',
+        compute='_compute_valuation_value', store=False
+    )
+
+    def _compute_last_move_info(self):
+        for quant in self:
+            # Obtener el movimiento más reciente relacionado con el producto y ubicación específica del `quant`
+            last_move = self.env['stock.move'].search(
+                [('product_id', '=', quant.product_id.id), ('location_dest_id', '=', quant.location_id.id)],
+                order='date desc',
+                limit=1
+            )
+            if last_move:
+                quant.last_move_date = last_move.date
+                quant.move_type = 'purchase' if last_move.picking_type_id.code == 'incoming' else 'internal'
+            else:
+                quant.last_move_date = False
+                quant.move_type = False
+
+    def _compute_valuation_value(self):
+        for quant in self:
+            # Valorización = Cantidad * Costo Unitario (standard_price)
+            quant.valuation_value = quant.quantity * quant.product_id.standard_price
