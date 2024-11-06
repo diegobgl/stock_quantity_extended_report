@@ -16,16 +16,14 @@
         <field name="model">stock.quant</field>
         <field name="inherit_id" ref="stock.view_stock_quant_tree"/>
         <field name="arch" type="xml">
-            <!-- Añadir un atributo de agrupación explícita -->
-            <xpath expr="//tree" position="attributes">
-                <attribute name="decoration-bf">group_by(location_id)</attribute>
-            </xpath>
-            <!-- Podemos ajustar la secuencia de los campos -->
-            <xpath expr="//field[@name='product_id']" position="after">
+            <!-- Modificamos la vista tree para ajustar el orden de los campos si es necesario -->
+            <xpath expr="//tree" position="inside">
+                <!-- Mover el campo `location_id` para que esté en una posición destacada -->
                 <field name="location_id" string="Location"/>
             </xpath>
         </field>
     </record>
+
 
 
 </odoo>

@@ -22,12 +22,10 @@ class StockQuantityHistory(models.TransientModel):
             'domain': [('product_id.type', '=', 'product')],
             'context': dict(self.env.context, to_date=self.inventory_datetime),
             'display_name': format_datetime(self.env, self.inventory_datetime),
-            'group_by': ['location_id'],  # Agrupar primero por ubicación
-            'order_by': 'location_id',  # Ordenar por ubicación explícitamente
+            'group_by': ['location_id', 'product_id'],  # Agrupar primero por ubicación y luego por producto
         }
 
         return action
-
     
 class ProductProduct(models.Model):
     _inherit = 'product.product'
