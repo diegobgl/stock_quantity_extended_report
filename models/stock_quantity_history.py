@@ -80,7 +80,7 @@ class ProductProduct(models.Model):
             # Valorización = Cantidad * Costo Unitario
             product.valuation_value = quantity * product.standard_price
 
-from odoo import models, fields, api
+
 
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
