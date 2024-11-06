@@ -107,6 +107,11 @@ class StockQuant(models.Model):
         compute='_compute_account_valuation', store=False
     )
 
+    weighted_average_price = fields.Float(
+        string='Precio Promedio Ponderado',
+        compute='_compute_weighted_average_price', store=False
+    )
+
     def _compute_last_move_info(self):
         for quant in self:
             # Obtener el movimiento más reciente relacionado con el producto y ubicación específica del `quant`
@@ -122,10 +127,34 @@ class StockQuant(models.Model):
                 quant.last_move_date = False
                 quant.move_type = False
 
+    def _compute_weighted_average_price(self):
+        for quant in self:
+            # Calcular el precio promedio ponderado basado en los movimientos hasta la fecha seleccionada
+            product = quant.product_id
+            moves = self.env['stock.move'].search([
+                ('product_id', '=', product.id),
+                ('state', '=', 'done'),
+                ('date', '<=', quant.create_date)  # Aquí se puede ajustar la fecha para usar `inventory_datetime`
+            ])
+            total_value = 0.0
+            total_quantity = 0.0
+
+            for move in moves:
+                if move.picking_type_id.code == 'incoming':  # Compras o entradas
+                    total_value += move.price_unit * move.product_qty
+                    total_quantity += move.product_qty
+                elif move.picking_type_id.code == 'outgoing':  # Salidas o ventas
+                    total_quantity -= move.product_qty
+
+            if total_quantity > 0:
+                quant.weighted_average_price = total_value / total_quantity
+            else:
+                quant.weighted_average_price = 0.0
+
     def _compute_valuation_value(self):
         for quant in self:
-            # Valorización = Cantidad * Costo Unitario (standard_price)
-            quant.valuation_value = quant.quantity * quant.product_id.standard_price
+            # Valorización = Cantidad Disponible * Precio Promedio Ponderado
+            quant.valuation_value = quant.quantity * quant.weighted_average_price
 
     def _compute_account_valuation(self):
         for quant in self:
