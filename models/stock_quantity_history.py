@@ -7,9 +7,9 @@ class StockQuantityHistory(models.TransientModel):
 
     def open_at_date(self):
         """
-        Modificación del método `open_at_date` para mostrar el inventario agrupado por ubicación.
+        Modificación del método `open_at_date` para agrupar primero por ubicación y luego por producto.
         """
-        # Obtenemos la vista tree de `stock.quant` que contiene información sobre las ubicaciones
+        # Obtenemos la vista tree de `stock.quant` que contiene información sobre las ubicaciones y productos
         tree_view_id = self.env.ref('stock.view_stock_quant_tree').id
 
         # Definimos la acción para abrir los resultados en la vista tree
@@ -22,7 +22,7 @@ class StockQuantityHistory(models.TransientModel):
             'domain': [('product_id.type', '=', 'product')],
             'context': dict(self.env.context, to_date=self.inventory_datetime),
             'display_name': format_datetime(self.env, self.inventory_datetime),
-            'group_by': ['location_id'],  # Agrupar los resultados por ubicación
+            'group_by': ['location_id', 'product_id'],  # Agrupar primero por ubicación y luego por producto
         }
 
         return action
