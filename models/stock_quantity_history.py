@@ -108,7 +108,7 @@ class StockQuant(models.Model):
     )
 
     weighted_average_price = fields.Float(
-        string='Precio Promedio Ponderado',
+        string='Precio Unitario',
         compute='_compute_weighted_average_price', store=False
     )
 
@@ -134,7 +134,7 @@ class StockQuant(models.Model):
             moves = self.env['stock.move'].search([
                 ('product_id', '=', product.id),
                 ('state', '=', 'done'),
-                ('date', '<=', quant.create_date)  # Aquí se puede ajustar la fecha para usar `inventory_datetime`
+                ('date', '<=', fields.Datetime.now())  # Ajustamos para calcular hasta la fecha actual
             ])
             total_value = 0.0
             total_quantity = 0.0
@@ -149,11 +149,12 @@ class StockQuant(models.Model):
             if total_quantity > 0:
                 quant.weighted_average_price = total_value / total_quantity
             else:
-                quant.weighted_average_price = 0.0
+                # Si no hay cantidad disponible para calcular el promedio, usar el precio estándar del producto
+                quant.weighted_average_price = product.standard_price
 
     def _compute_valuation_value(self):
         for quant in self:
-            # Valorización = Cantidad Disponible * Precio Promedio Ponderado
+            # Valorización = Cantidad Disponible * Precio Unitario
             quant.valuation_value = quant.quantity * quant.weighted_average_price
 
     def _compute_account_valuation(self):

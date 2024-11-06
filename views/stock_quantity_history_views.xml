@@ -30,9 +30,10 @@
         <field name="inherit_id" ref="stock.view_stock_quant_tree"/>
         <field name="arch" type="xml">
             <xpath expr="//tree" position="inside">
-                <field name="last_move_date"/>
-                <field name="move_type"/>
-                <field name="valuation_value"/>
+                <field name="last_move_date" string="Fecha Último Movimiento"/>
+                <field name="move_type" string="Tipo Movimiento"/>
+                <field name="weighted_average_price" string="Precio Unitario"/>
+                <field name="valuation_value" string="Valorizado"/>
                 <field name="account_valuation_id" string="Cuenta Contable de Valorización"/>
             </xpath>
         </field>
