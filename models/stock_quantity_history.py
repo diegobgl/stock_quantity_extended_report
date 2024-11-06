@@ -1,4 +1,4 @@
-from odoo import models, fields, api
+from odoo import  _, models, fields, api
 from odoo.tools.misc import format_datetime
 from odoo.osv import expression
 
