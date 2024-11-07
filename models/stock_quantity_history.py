@@ -18,7 +18,7 @@ class StockQuantityHistoryExtended(models.TransientModel):
             action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
 
             # Configuración de vistas
-            tree_view = self.env.ref('stock_account.stock_valuation_layer_valuation_at_date_tree_inherited', raise_if_not_found=False)
+            tree_view = self.env.ref('your_module.stock_valuation_layer_valuation_at_date_tree_extended', raise_if_not_found=False)
             graph_view = self.env.ref('stock_account.stock_valuation_layer_graph', raise_if_not_found=False)
             action['views'] = [
                 (tree_view.id if tree_view else False, 'tree'),
@@ -177,16 +177,10 @@ class StockQuant(models.Model):
 class StockValuationLayer(models.Model):
     _inherit = 'stock.valuation.layer'
 
-    location_id = fields.Many2one(
-        'stock.location', string="Ubicación",
-        compute='_compute_location_id', store=True
+    location_id = fields.Many2one('stock.location', string='Ubicación', readonly=True)
+    last_move_date = fields.Datetime(string='Último Movimiento', readonly=True)
+    move_type = fields.Selection(
+        [('purchase', 'Compra'), ('internal', 'Transferencia Interna')],
+        string='Tipo Movimiento', readonly=True
     )
-
-    @api.depends('stock_move_id')
-    def _compute_location_id(self):
-        for layer in self:
-            # Usar location_id del movimiento de stock asociado, si está disponible
-            if layer.stock_move_id:
-                layer.location_id = layer.stock_move_id.location_id
-            else:
-                layer.location_id = False
+    valuation_value = fields.Float(string='Valorizado', readonly=True)
