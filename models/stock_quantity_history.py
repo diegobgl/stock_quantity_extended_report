@@ -90,7 +90,7 @@ class ProductProduct(models.Model):
             quants = self.env['stock.quant'].search(domain)
             product.location_ids = quants.mapped('location_id')
 
-def _compute_lot_ids(self):
+    def _compute_lot_ids(self):
     """Computa los lotes disponibles para el producto hasta la fecha consultada."""
     to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
     for product in self:
@@ -123,6 +123,29 @@ def _compute_lot_ids(self):
             quant_records = self.env['stock.quant'].search([('product_id', '=', product.id)])
             quantity = sum(quant_records.mapped('quantity'))
             product.valuation_value = quantity * product.standard_price
+
+    @api.depends('stock_move_ids')
+    def _compute_last_move_date(self):
+        """
+        Calcula la fecha del último movimiento relacionado con el producto hasta la fecha de consulta.
+        """
+        to_date = self.env.context.get('to_date')  # Fecha límite para la consulta
+        for product in self:
+            domain = [
+                ('product_id', '=', product.id),
+                ('state', '=', 'done')
+            ]
+            if to_date:
+                domain.append(('date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
+
+            # Buscar el movimiento más reciente hasta la fecha de consulta
+            last_move = self.env['stock.move'].search(
+                domain,
+                order='date desc',
+                limit=1
+            )
+            product.last_move_date = last_move.date if last_move else False
+
 
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
