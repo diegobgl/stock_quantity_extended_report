@@ -51,6 +51,11 @@ class ProductProduct(models.Model):
         compute='_compute_location_ids', store=False
     )
 
+    lot_ids = fields.Many2many(
+        'stock.production.lot', string='Lotes Disponibles',
+        compute='_compute_lot_ids', store=False
+    )
+
     valuation_account_id = fields.Many2one(
         'account.account', 
         string="Cuenta Contable de Valorización",
@@ -85,6 +90,15 @@ class ProductProduct(models.Model):
             quants = self.env['stock.quant'].search(domain)
             product.location_ids = quants.mapped('location_id')
 
+    def _compute_lot_ids(self):
+        """Computa los lotes disponibles para el producto."""
+        to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
+        for product in self:
+            domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
+            if to_date:
+                domain.append(('in_date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
+            quants = self.env['stock.quant'].search(domain)
+            product.lot_ids = quants.mapped('lot_id')
 
     def _compute_last_move_info(self):
         for product in self:
@@ -105,8 +119,6 @@ class ProductProduct(models.Model):
             quant_records = self.env['stock.quant'].search([('product_id', '=', product.id)])
             quantity = sum(quant_records.mapped('quantity'))
             product.valuation_value = quantity * product.standard_price
-
-
 
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
