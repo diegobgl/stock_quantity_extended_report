@@ -124,7 +124,6 @@ class ProductProduct(models.Model):
             quantity = sum(quant_records.mapped('quantity'))
             product.valuation_value = quantity * product.standard_price
 
-    @api.depends('stock_move_ids')
     def _compute_last_move_date(self):
         """
         Calcula la fecha del último movimiento relacionado con el producto hasta la fecha de consulta.
