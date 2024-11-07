@@ -98,7 +98,8 @@ class ProductProduct(models.Model):
             if to_date:
                 domain.append(('in_date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
             quants = self.env['stock.quant'].search(domain)
-            product.lot_ids = quants.mapped('lot_id')
+            lot_ids = quants.mapped('lot_id')
+            product.lot_ids = lot_ids.filtered(lambda lot: lot)  # Filtra registros válidos
 
     def _compute_last_move_info(self):
         for product in self:
