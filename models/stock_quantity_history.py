@@ -66,10 +66,17 @@ class ProductProduct(models.Model):
         compute='_compute_valuation_value', store=False
     )
 
+
+    @api.depends('product_id')
     def _compute_location_ids(self):
-        for product in self:
-            quant_records = self.env['stock.quant'].search([('product_id', '=', product.id)])
-            product.location_ids = quant_records.mapped('location_id')
+        for record in self:
+            # Busca las ubicaciones donde hay disponibilidad del producto
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', record.product_id.id),
+                ('quantity', '>', 0),
+            ])
+            record.location_ids = quants.mapped('location_id')
+
 
     def _compute_last_move_info(self):
         for product in self:
