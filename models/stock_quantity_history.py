@@ -77,7 +77,6 @@ class ProductProduct(models.Model):
             product.location_ids = quants.mapped('location_id')
 
 
-
     def _compute_last_move_info(self):
         for product in self:
             last_move = self.env['stock.move'].search(
