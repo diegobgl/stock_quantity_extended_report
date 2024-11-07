@@ -34,7 +34,7 @@ class StockQuantityHistoryExtended(models.TransientModel):
 
             action['domain'] = domain
             action['display_name'] = format_datetime(self.env, self.inventory_datetime)
-            action['context'] = "{}"
+            action['context'] = {"to_date": self.inventory_datetime}
 
             return action
 
@@ -42,13 +42,14 @@ class StockQuantityHistoryExtended(models.TransientModel):
         return super(StockQuantityHistoryExtended, self).open_at_date()
 
 
+
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
     location_ids = fields.Many2many(
-        'stock.location', string='Ubicaciones', store=False
+        'stock.location', string='Ubicaciones',
+        compute='_compute_location_ids', store=False
     )
-
     last_move_date = fields.Datetime(
         string='Fecha Último Movimiento',
         compute='_compute_last_move_info', store=False
@@ -65,6 +66,15 @@ class ProductProduct(models.Model):
         compute='_compute_valuation_value', store=False
     )
 
+    def _compute_location_ids(self):
+        """Computa las ubicaciones donde está disponible el producto hasta la fecha consultada."""
+        to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
+        for product in self:
+            domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
+            if to_date:
+                domain.append(('in_date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
+            quants = self.env['stock.quant'].search(domain)
+            product.location_ids = quants.mapped('location_id')
 
 
 
@@ -90,54 +100,16 @@ class ProductProduct(models.Model):
 
 
 
-
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
-
-    last_move_date = fields.Datetime(
-        string='Fecha Último Movimiento',
-        compute='_compute_last_move_info', store=False
-    )
-
-    move_type = fields.Selection(
-        [('purchase', 'Compra'), ('internal', 'Transferencia Interna')],
-        string='Tipo Movimiento',
-        compute='_compute_last_move_info', store=False
-    )
-
-    valuation_value = fields.Float(
-        string='Valorizado',
-        compute='_compute_valuation_value', store=False
-    )
 
     weighted_average_price = fields.Float(
         string='Precio Unitario',
         compute='_compute_weighted_average_price', store=False
     )
 
-    account_valuation_id = fields.Many2one(
-    'account.account', 
-    string='Cuenta Contable de Valorización',
-    compute='_compute_account_valuation', 
-    store=False
-)
-
-
-    def _compute_last_move_info(self):
-        for quant in self:
-            last_move = self.env['stock.move'].search(
-                [('product_id', '=', quant.product_id.id), ('location_dest_id', '=', quant.location_id.id)],
-                order='date desc',
-                limit=1
-            )
-            if last_move:
-                quant.last_move_date = last_move.date
-                quant.move_type = 'purchase' if last_move.picking_type_id.code == 'incoming' else 'internal'
-            else:
-                quant.last_move_date = False
-                quant.move_type = False
-
     def _compute_weighted_average_price(self):
+        """Calcula el precio promedio ponderado para las existencias hasta la fecha consultada."""
         to_date = self.env.context.get('to_date')
         for quant in self:
             product = quant.product_id
@@ -146,7 +118,7 @@ class StockQuant(models.Model):
 
             domain = [('product_id', '=', product.id), ('state', '=', 'done')]
             if to_date:
-                domain.append(('date', '<=', to_date))
+                domain.append(('date', '<=', to_date))  # Limitar movimientos hasta la fecha especificada
 
             moves = self.env['stock.move'].search(domain)
             for move in moves:
@@ -155,12 +127,9 @@ class StockQuant(models.Model):
                     total_quantity += move.product_qty
                 elif move.picking_type_id.code == 'outgoing':
                     total_quantity -= move.product_qty
-                if total_quantity < 0:
-                    total_quantity = 0
 
             quant.weighted_average_price = total_value / total_quantity if total_quantity > 0 else product.standard_price
 
-    def _compute_valuation_value(self):
         for quant in self:
             price_unit = quant.weighted_average_price if quant.weighted_average_price > 0 else quant.product_id.standard_price
             quant.valuation_value = max(quant.quantity, 0) * price_unit
