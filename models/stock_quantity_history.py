@@ -46,8 +46,7 @@ class ProductProduct(models.Model):
     _inherit = 'product.product'
 
     location_ids = fields.Many2many(
-        'stock.location', string='Ubicaciones',
-        compute='_compute_location_ids', store=False
+        'stock.location', string='Ubicaciones', store=False
     )
 
     last_move_date = fields.Datetime(
@@ -67,14 +66,6 @@ class ProductProduct(models.Model):
     )
 
 
-    def _compute_location_ids(self):
-        for record in self:
-            # Busca las ubicaciones donde hay disponibilidad del producto
-            quants = self.env['stock.quant'].search([
-                ('product_id', '=', record.product_id.id),
-                ('quantity', '>', 0),
-            ])
-            record.location_ids = quants.mapped('location_id')
 
 
     def _compute_last_move_info(self):
