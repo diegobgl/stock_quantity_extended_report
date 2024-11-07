@@ -9,7 +9,7 @@
                 <field name="last_move_date" string="Último Movimiento" readonly="1"/>
                 <field name="move_type" string="Tipo Movimiento" readonly="1"/>
                 <field name="valuation_value" string="Valorizado" readonly="1"/>
-                <field name="location_id" string="Ubicación" />
+                <field name="location_id" string="Ubicación" widget="many2many_tags" />
             </xpath>
         </field>
     </record>
