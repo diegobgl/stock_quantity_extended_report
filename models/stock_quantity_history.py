@@ -66,7 +66,7 @@ class ProductProduct(models.Model):
 
     last_move_date = fields.Datetime(
         string='Fecha Último Movimiento',
-        compute='_compute_last_move_info', store=False
+        compute='_compute_last_move_date', store=False
     )
 
     move_type = fields.Selection(
