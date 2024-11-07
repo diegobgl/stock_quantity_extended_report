@@ -92,21 +92,17 @@ class ProductProduct(models.Model):
             quants = self.env['stock.quant'].search(domain)
             product.location_ids = quants.mapped('location_id')
 
-    def _compute_lot_ids(self):
-        """Computa los lotes disponibles para el producto hasta la fecha consultada."""
-        to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
-        for product in self:
-            # Construir el dominio de búsqueda para quants
-            domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
-            if to_date:
-                domain.append(('in_date', '<=', to_date))  # Filtrar por fecha si está definida en el contexto
-
-            # Buscar quants y mapear a lotes válidos
-            quants = self.env['stock.quant'].search(domain)
-            lot_ids = quants.mapped('lot_id').filtered(lambda lot: lot)  # Filtrar solo lotes existentes
-
-            # Asignar lotes al campo Many2many
-            product.lot_ids = [(6, 0, lot_ids.ids)]
+def _compute_lot_ids(self):
+    """Computa los lotes disponibles para el producto hasta la fecha consultada."""
+    to_date = self.env.context.get('to_date')
+    _logger.info(f"Computing lot_ids with to_date: {to_date}")
+    for product in self:
+        domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
+        if to_date:
+            domain.append(('in_date', '<=', to_date))
+        quants = self.env['stock.quant'].search(domain)
+        lot_ids = quants.mapped('lot_id').filtered(lambda lot: lot.exists())
+        product.lot_ids = [(6, 0, lot_ids.ids)]
 
     def _compute_last_move_info(self):
         for product in self:
