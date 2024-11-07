@@ -20,8 +20,8 @@
         <field name="inherit_id" ref="stock_account.stock_valuation_layer_valuation_at_date_tree_inherited"/>
         <field name="arch" type="xml">
             <xpath expr="//tree" position="inside">
-                <field name="location_id" string="Ubicación" />
                 <field name="last_move_date" string="Último Movimiento" />
+                <field name="location_id" string="Ubicación" />
                 <field name="move_type" string="Tipo Movimiento" />
                 <field name="valuation_value" string="Valorizado" />
             </xpath>
