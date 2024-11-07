@@ -184,3 +184,14 @@ class StockValuationLayer(models.Model):
         string='Tipo Movimiento', readonly=True
     )
     valuation_value = fields.Float(string='Valorizado', readonly=True)
+
+    @api.depends('product_id')
+    def _compute_location_ids(self):
+        for record in self:
+            # Busca las ubicaciones donde hay disponibilidad del producto
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', record.product_id.id),
+                ('quantity', '>', 0),
+            ])
+            record.location_ids = quants.mapped('location_id')
+
