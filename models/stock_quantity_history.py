@@ -118,6 +118,14 @@ class StockQuant(models.Model):
         compute='_compute_weighted_average_price', store=False
     )
 
+    account_valuation_id = fields.Many2one(
+    'account.account', 
+    string='Cuenta Contable de Valorización',
+    compute='_compute_account_valuation', 
+    store=False
+)
+
+
     def _compute_last_move_info(self):
         for quant in self:
             last_move = self.env['stock.move'].search(
@@ -163,6 +171,7 @@ class StockQuant(models.Model):
         for quant in self:
             # Obtener la cuenta contable de valorización desde la categoría del producto
             quant.account_valuation_id = quant.product_id.categ_id.property_stock_valuation_account_id
+
 
 
 class StockValuationLayer(models.Model):
