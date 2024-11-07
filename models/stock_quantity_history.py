@@ -67,7 +67,6 @@ class ProductProduct(models.Model):
     )
 
 
-    @api.depends('product_id')
     def _compute_location_ids(self):
         for record in self:
             # Busca las ubicaciones donde hay disponibilidad del producto
