@@ -50,6 +50,15 @@ class ProductProduct(models.Model):
         'stock.location', string='Ubicaciones',
         compute='_compute_location_ids', store=False
     )
+
+    valuation_account_id = fields.Many2one(
+        'account.account', 
+        string="Cuenta Contable de Valorización",
+        related='categ_id.property_stock_valuation_account_id', 
+        store=True,
+        readonly=True
+    )
+
     last_move_date = fields.Datetime(
         string='Fecha Último Movimiento',
         compute='_compute_last_move_info', store=False
