@@ -5,12 +5,13 @@
         <field name="inherit_id" ref="stock.view_stock_product_tree"/>
         <field name="arch" type="xml">
             <xpath expr="//tree" position="inside">
+                 <field name="location_ids" string=" Ubicacion"/>
                 <field name="lot_ids" string=" Numero de Lote"/>
                 <field name="unit_value" string="Precio Unitario Promedio"/>
                 <field name="total_valuation" string="Valor Total Valorizado"/>
                 <field name="valuation_account_id" string="Cuenta Contable"/>
                  <field name="move_type" string=" tipo de Movimiento"/>
-                 <field name="last_move_date" string=" tipo de Movimiento"/>
+                 <field name="last_move_date" string=" Fecha de Movimiento"/>
             </xpath>
         </field>
     </record>
