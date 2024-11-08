@@ -131,8 +131,15 @@ class ProductProduct(models.Model):
 
     def _compute_lot_ids(self):
         for product in self:
-            quants = self.env['stock.quant'].search([('product_id', '=', product.id), ('quantity', '>', 0)])
-            product.lot_ids = quants.mapped('lot_id')
+            # Filtrar quants relacionados con el producto
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', product.id),
+                ('quantity', '>', 0)
+            ])
+            # Obtener los IDs de los lotes relacionados
+            lot_ids = quants.mapped('lot_id').ids
+            # Asignar los IDs al campo Many2many
+            product.lot_ids = [(6, 0, lot_ids)]
 
 
 class StockQuant(models.Model):
