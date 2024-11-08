@@ -247,35 +247,6 @@ class StockQuant(models.Model):
 
             quant.weighted_average_price = total_value / total_quantity if total_quantity > 0 else product.standard_price
 
-        """Calcula el precio promedio ponderado para las existencias hasta la fecha consultada."""
-        to_date = self.env.context.get('to_date')
-        for quant in self:
-            product = quant.product_id
-            total_value = 0.0
-            total_quantity = 0.0
-
-            domain = [('product_id', '=', product.id), ('state', '=', 'done')]
-            if to_date:
-                domain.append(('date', '<=', to_date))  # Limitar movimientos hasta la fecha especificada
-
-            moves = self.env['stock.move'].search(domain)
-            for move in moves:
-                if move.picking_type_id.code in ['incoming', 'inventory']:
-                    total_value += move.price_unit * move.product_qty
-                    total_quantity += move.product_qty
-                elif move.picking_type_id.code == 'outgoing':
-                    total_quantity -= move.product_qty
-
-            quant.weighted_average_price = total_value / total_quantity if total_quantity > 0 else product.standard_price
-
-        for quant in self:
-            price_unit = quant.weighted_average_price if quant.weighted_average_price > 0 else quant.product_id.standard_price
-            quant.valuation_value = max(quant.quantity, 0) * price_unit
-
-        for quant in self:
-            # Obtener la cuenta contable de valorización desde la categoría del producto
-            quant.account_valuation_id = quant.product_id.categ_id.property_stock_valuation_account_id
-
 
 
 class StockValuationLayer(models.Model):
