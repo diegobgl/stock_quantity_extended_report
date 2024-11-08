@@ -10,17 +10,17 @@ class StockQuantityHistory(models.TransientModel):
         domain="[('usage', 'in', ['internal', 'transit'])]"
     )
 
-def open_at_date(self):
-    active_model = self.env.context.get('active_model')
-    if active_model == 'stock.valuation.layer':
-        action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
-        domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
-        if self.location_id:
-            domain.append(('location_id', '=', self.location_id.id))
-        action['domain'] = domain
-        action['context'] = dict(self.env.context, to_date=self.inventory_datetime)
-        return action
-    return super().open_at_date()
+    def open_at_date(self):
+        active_model = self.env.context.get('active_model')
+        if active_model == 'stock.valuation.layer':
+            action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
+            domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
+            if self.location_id:
+                domain.append(('location_id', '=', self.location_id.id))
+            action['domain'] = domain
+            action['context'] = dict(self.env.context, to_date=self.inventory_datetime)
+            return action
+        return super().open_at_date()
 
 
 
