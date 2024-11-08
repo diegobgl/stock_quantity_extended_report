@@ -65,7 +65,6 @@ class ProductProduct(models.Model):
         store=True,
         readonly=True
     )
-
     last_move_date = fields.Datetime(
         string='Fecha Último Movimiento',
         compute='_compute_last_move_date', store=False
