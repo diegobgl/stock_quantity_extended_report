@@ -42,6 +42,13 @@ class ProductProduct(models.Model):
         store=True
     )
 
+    lot_ids = fields.Many2many(
+        'stock.production.lot',
+        string='Lotes Disponibles',
+        compute='_compute_lot_ids'
+    )
+
+
     def _compute_location_ids(self):
         for product in self:
             # Obtener todas las ubicaciones donde se encuentra este producto
@@ -84,3 +91,9 @@ class ProductProduct(models.Model):
             # Calcular el valor total valorizado considerando el inventario actual
             quant_records = self.env['stock.quant'].search([('product_id', '=', product.id)])
             product.total_valuation = sum(quant_records.mapped(lambda q: q.quantity * q.product_id.standard_price))
+
+    @api.depends('stock_quant_ids')
+    def _compute_lot_ids(self):
+        for product in self:
+            quants = product.stock_quant_ids.filtered(lambda q: q.quantity > 0)
+            product.lot_ids = quants.mapped('lot_id')
