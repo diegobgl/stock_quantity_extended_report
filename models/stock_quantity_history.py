@@ -80,6 +80,19 @@ class ProductProduct(models.Model):
         compute='_compute_valuation_value', store=False
     )
 
+    unit_value = fields.Float(
+        string='Precio Promedio Unitario',
+        compute='_compute_unit_value',
+        store=False
+    )
+
+    def _compute_unit_value(self):
+        for product in self:
+            quant_records = self.env['stock.quant'].search([('product_id', '=', product.id), ('quantity', '>', 0)])
+            total_quantity = sum(quant.quantity for quant in quant_records)
+            total_value = sum(quant.quantity * quant.product_id.standard_price for quant in quant_records)
+            product.unit_val
+            
     def _compute_location_ids(self):
         """Computa las ubicaciones donde está disponible el producto hasta la fecha consultada."""
         to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
