@@ -86,13 +86,26 @@ class ProductProduct(models.Model):
         store=False
     )
 
+    total_valuation = fields.Float(
+        string='Valor Total Valorizado',
+        compute='_compute_total_valuation',
+        store=False
+    )
+
+    def _compute_total_valuation(self):
+        for product in self:
+            # Obtener todos los quants del producto que tienen cantidad disponible
+            quant_records = self.env['stock.quant'].search([('product_id', '=', product.id), ('quantity', '>', 0)])
+            # Calcular el valor total valorizado
+            product.total_valuation = sum(quant.quantity * quant.product_id.standard_price for quant in quant_records)
+
     def _compute_unit_value(self):
         for product in self:
             quant_records = self.env['stock.quant'].search([('product_id', '=', product.id), ('quantity', '>', 0)])
             total_quantity = sum(quant.quantity for quant in quant_records)
             total_value = sum(quant.quantity * quant.product_id.standard_price for quant in quant_records)
             product.unit_val
-            
+
     def _compute_location_ids(self):
         """Computa las ubicaciones donde está disponible el producto hasta la fecha consultada."""
         to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
