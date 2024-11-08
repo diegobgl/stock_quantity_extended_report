@@ -10,38 +10,18 @@ class StockQuantityHistory(models.TransientModel):
         domain="[('usage', 'in', ['internal', 'transit'])]"
     )
 
-    def open_at_date(self):
-        """
-        Modifica el método original para añadir la lógica de la ubicación sin alterar la consulta.
-        """
-        active_model = self.env.context.get('active_model')
-        if active_model == 'stock.valuation.layer':
-            # Llamar a la acción original
-            action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
+def open_at_date(self):
+    active_model = self.env.context.get('active_model')
+    if active_model == 'stock.valuation.layer':
+        action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
+        domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
+        if self.location_id:
+            domain.append(('location_id', '=', self.location_id.id))
+        action['domain'] = domain
+        action['context'] = dict(self.env.context, to_date=self.inventory_datetime)
+        return action
+    return super().open_at_date()
 
-            # Configurar las vistas
-            tree_view = self.env.ref('stock_account.stock_valuation_layer_valuation_at_date_tree_inherited', raise_if_not_found=False)
-            graph_view = self.env.ref('stock_account.stock_valuation_layer_graph', raise_if_not_found=False)
-            action['views'] = [
-                (tree_view.id if tree_view else False, 'tree'),
-                (self.env.ref('stock_account.stock_valuation_layer_form').id, 'form'),
-                (self.env.ref('stock_account.stock_valuation_layer_pivot').id, 'pivot'),
-                (graph_view.id if graph_view else False, 'graph')
-            ]
-
-            # Modificar el dominio para incluir la ubicación si está especificada
-            domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
-            if self.location_id:
-                domain.append(('location_id', '=', self.location_id.id))
-
-            action['domain'] = domain
-            action['display_name'] = _("Inventory at %s") % self.inventory_datetime.strftime('%Y-%m-%d %H:%M:%S')
-            action['context'] = "{}"
-
-            return action
-
-        # Lógica predeterminada para otros modelos
-        return super(StockQuantityHistory, self).open_at_date()
 
 
 
@@ -131,15 +111,14 @@ class ProductProduct(models.Model):
 
     def _compute_lot_ids(self):
         for product in self:
-            # Filtrar quants relacionados con el producto
             quants = self.env['stock.quant'].search([
                 ('product_id', '=', product.id),
                 ('quantity', '>', 0)
             ])
-            # Obtener los IDs de los lotes relacionados
             lot_ids = quants.mapped('lot_id').ids
-            # Asignar los IDs al campo Many2many
             product.lot_ids = [(6, 0, lot_ids)]
+
+
 
 
 class StockQuant(models.Model):
