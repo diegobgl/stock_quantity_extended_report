@@ -1,19 +1,47 @@
 <odoo>
-    <record id="view_product_tree_extended" model="ir.ui.view">
-        <field name="name">product.product.tree.extended</field>
+    <record id="view_stock_product_tree_inherit" model="ir.ui.view">
+        <field name="name">product.product.tree.inherit</field>
         <field name="model">product.product</field>
         <field name="inherit_id" ref="stock.view_stock_product_tree"/>
         <field name="arch" type="xml">
-            <xpath expr="//tree" position="inside">
-                 <field name="location_ids" string=" Ubicacion"/>
-                <field name="lot_ids" string=" Numero de Lote"/>
-                <field name="unit_value" string="Precio Unitario Promedio"/>
-                <field name="total_valuation" string="Valor Total Valorizado"/>
-                <field name="valuation_account_id" string="Cuenta Contable"/>
-                 <field name="move_type" string=" tipo de Movimiento"/>
-                 <field name="last_move_date" string=" Fecha de Movimiento"/>
+            <xpath expr="//field[@name='type']" position="after">
+                <!-- Agregar los nuevos campos -->
+                <field name="last_move_date" string="Último Movimiento" readonly="1"/>
+                <field name="move_type" string="Tipo Movimiento" readonly="1"/>
+                <field name="valuation_value" string="Valorizado" readonly="1"/>
+                <field name="location_ids" string="Ubicación"  widget="many2many_tags"  />
+                <field name="lot_ids"  string="Lotes Disponibles"  widget="many2many_tags"/>
+                <field name="valuation_account_id" string="Cuenta Contable de Valorización" readonly="1" />
             </xpath>
         </field>
     </record>
+
+
+    <record id="stock_valuation_layer_valuation_at_date_tree_extended" model="ir.ui.view">
+        <field name="name">stock.valuation.layer.tree.extended</field>
+        <field name="model">stock.valuation.layer</field>
+        <field name="inherit_id" ref="stock_account.stock_valuation_layer_valuation_at_date_tree_inherited"/>
+        <field name="arch" type="xml">
+            <xpath expr="//tree" position="inside">
+                <field name="last_move_date" string="Último Movimiento" />
+                <field name="location_id" string="Ubicación" />
+                <field name="move_type" string="Tipo Movimiento" />
+                <field name="valuation_value" string="Valorizado" />
+            </xpath>
+        </field>
+    </record>
+
+
+    <record id="view_stock_quant_tree_inherit" model="ir.ui.view">
+        <field name="name">stock.quant.tree.inherit</field>
+        <field name="model">stock.quant</field>
+        <field name="inherit_id" ref="stock.view_stock_quant_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//tree" position="inside">
+                <field name="weighted_average_price" string="Precio Unitario"/>
+            </xpath>
+        </field>
+    </record>
+
 
 </odoo>
