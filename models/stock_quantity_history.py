@@ -53,10 +53,8 @@ class ProductProduct(models.Model):
     )
 
     lot_ids = fields.Many2many(
-        'stock.production.lot',
-        string="Lotes Disponibles",
-        compute='_compute_lot_ids',
-        store=False,
+        'stock.lot', string='Lotes Disponibles',
+        compute='_compute_lot_ids', store=False
     )
 
     valuation_account_id = fields.Many2one(
@@ -96,14 +94,18 @@ class ProductProduct(models.Model):
         """Computa los lotes disponibles para el producto hasta la fecha consultada."""
         to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
         for product in self:
+            # Filtrar quants por producto y fecha
             domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
             if to_date:
                 domain.append(('in_date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
             quants = self.env['stock.quant'].search(domain)
 
-            # Obtener lotes válidos
+            # Obtener lotes válidos y asegurarse de que existan
             lot_ids = quants.mapped('lot_id').filtered(lambda lot: lot.exists())  # Filtra lotes válidos
-            product.lot_ids = [(6, 0, lot_ids.ids)]  # Asignar correctamente valores a un campo Many2many
+            if lot_ids:
+                product.lot_ids = [(6, 0, lot_ids.ids)]  # Asignar correctamente valores a un campo Many2many
+            else:
+                product.lot_ids = [(5,)]  # Limpia el campo si no hay lotes válidos
 
     def _compute_last_move_info(self):
         for product in self:
