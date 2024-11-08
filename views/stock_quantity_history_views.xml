@@ -50,7 +50,7 @@
         <field name="inherit_id" ref="stock.view_stock_quantity_history"/>
         <field name="arch" type="xml">
             <xpath expr="//footer" position="inside">
-                <button name="open_detailed_view" string="Detailed View" type="object" class="btn-secondary" data-hotkey="d"/>
+                <button name="open_detailed_view" string="Informe Detallado " type="object" class="btn-danger" data-hotkey="d"/>
             </xpath>
         </field>
     </record>
