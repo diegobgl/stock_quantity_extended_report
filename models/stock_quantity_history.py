@@ -202,12 +202,51 @@ class ProductProduct(models.Model):
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
 
-    weighted_average_price = fields.Float(
-        string='Precio Unitario',
-        compute='_compute_weighted_average_price', store=False
+    valuation_value = fields.Float(
+        string='Valorizado',
+        compute='_compute_valuation_value',
+        store=False
     )
 
+    weighted_average_price = fields.Float(
+        string='Precio Promedio Ponderado',
+        compute='_compute_weighted_average_price',
+        store=False
+    )
+
+    def _compute_valuation_value(self):
+        """
+        Calcula el valor total valorizado para cada `stock.quant`.
+        """
+        for quant in self:
+            price_unit = quant.weighted_average_price or quant.product_id.standard_price
+            quant.valuation_value = max(quant.quantity, 0) * price_unit
+
     def _compute_weighted_average_price(self):
+        """
+        Calcula el precio promedio ponderado para cada `stock.quant`.
+        """
+        for quant in self:
+            product = quant.product_id
+            total_value = 0.0
+            total_quantity = 0.0
+
+            # Filtrar movimientos relevantes
+            domain = [('product_id', '=', product.id), ('state', '=', 'done')]
+            to_date = self.env.context.get('to_date')
+            if to_date:
+                domain.append(('date', '<=', to_date))
+
+            moves = self.env['stock.move'].search(domain)
+            for move in moves:
+                if move.picking_type_id.code in ['incoming', 'inventory']:
+                    total_value += move.price_unit * move.product_qty
+                    total_quantity += move.product_qty
+                elif move.picking_type_id.code == 'outgoing':
+                    total_quantity -= move.product_qty
+
+            quant.weighted_average_price = total_value / total_quantity if total_quantity > 0 else product.standard_price
+
         """Calcula el precio promedio ponderado para las existencias hasta la fecha consultada."""
         to_date = self.env.context.get('to_date')
         for quant in self:
