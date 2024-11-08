@@ -1,29 +1,48 @@
 from odoo import models, fields, api, _
 from odoo.tools.misc import format_datetime
 
-
 class StockQuantityHistory(models.TransientModel):
     _inherit = 'stock.quantity.history'
 
+    location_id = fields.Many2one(
+        'stock.location',
+        string="Ubicación",
+        domain="[('usage', 'in', ['internal', 'transit'])]"
+    )
+
     def open_at_date(self):
         """
-        Modificación del método open_at_date para mostrar agrupaciones por ubicación y producto.
+        Modifica el método original para añadir la lógica de la ubicación sin alterar la consulta.
         """
-        tree_view_id = self.env.ref('stock.view_stock_quant_tree').id
+        active_model = self.env.context.get('active_model')
+        if active_model == 'stock.valuation.layer':
+            # Llamar a la acción original
+            action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
 
-        action = {
-            'type': 'ir.actions.act_window',
-            'views': [(tree_view_id, 'tree')],
-            'view_mode': 'tree',
-            'name': _('Product Quantities by Location'),
-            'res_model': 'stock.quant',
-            'domain': [('product_id.type', '=', 'product')],
-            'context': dict(self.env.context, to_date=self.inventory_datetime),
-            'display_name': format_datetime(self.env, self.inventory_datetime),
-            'group_by': ['location_id', 'product_id'],
-        }
+            # Configurar las vistas
+            tree_view = self.env.ref('stock_account.stock_valuation_layer_valuation_at_date_tree_inherited', raise_if_not_found=False)
+            graph_view = self.env.ref('stock_account.stock_valuation_layer_graph', raise_if_not_found=False)
+            action['views'] = [
+                (tree_view.id if tree_view else False, 'tree'),
+                (self.env.ref('stock_account.stock_valuation_layer_form').id, 'form'),
+                (self.env.ref('stock_account.stock_valuation_layer_pivot').id, 'pivot'),
+                (graph_view.id if graph_view else False, 'graph')
+            ]
 
-        return action
+            # Modificar el dominio para incluir la ubicación si está especificada
+            domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
+            if self.location_id:
+                domain.append(('location_id', '=', self.location_id.id))
+
+            action['domain'] = domain
+            action['display_name'] = _("Inventory at %s") % self.inventory_datetime.strftime('%Y-%m-%d %H:%M:%S')
+            action['context'] = "{}"
+
+            return action
+
+        # Lógica predeterminada para otros modelos
+        return super(StockQuantityHistory, self).open_at_date()
+
 
 
 class ProductProduct(models.Model):
