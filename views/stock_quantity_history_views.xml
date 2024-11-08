@@ -44,20 +44,17 @@
     </record>
 
 
-    <record id="view_stock_quantity_history_extended_form" model="ir.ui.view">
-        <field name="name">stock.quantity.history.extended.form</field>
+    <record id="view_stock_quantity_history_inherit" model="ir.ui.view">
+        <field name="name">Inventory Report at Date Inherit</field>
         <field name="model">stock.quantity.history</field>
+        <field name="inherit_id" ref="stock.view_stock_quantity_history"/>
         <field name="arch" type="xml">
-            <form>
-                <header>
-                    <button name="open_detailed_view" type="object" class="btn-secondary" string="Ver Detallado por Lotes"/>
-                </header>
-                <sheet>
-                    <!-- Campos necesarios -->
-                </sheet>
-            </form>
+            <xpath expr="//footer" position="inside">
+                <button name="open_detailed_view" string="Detailed View" type="object" class="btn-secondary" data-hotkey="d"/>
+            </xpath>
         </field>
     </record>
+
 
 
     <record id="view_stock_quant_tree_extended" model="ir.ui.view">
