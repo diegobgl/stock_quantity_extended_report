@@ -1,10 +1,8 @@
-
 from odoo import models, fields, api, _
 from odoo.tools.misc import format_datetime
 from odoo.osv import expression
 import logging
 
-_logger = logging.getLogger(__name__)
 
 class StockQuantityHistoryExtended(models.TransientModel):
     _inherit = 'stock.quantity.history'
@@ -49,6 +47,7 @@ class StockQuantityHistoryExtended(models.TransientModel):
 
 class ProductProduct(models.Model):
     _inherit = 'product.product'
+    _logger = logging.getLogger(__name__)
 
     location_ids = fields.Many2many(
         'stock.location', string='Ubicaciones',
