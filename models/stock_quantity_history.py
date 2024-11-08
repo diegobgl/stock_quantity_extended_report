@@ -355,13 +355,16 @@ class StockValuationLayer(models.Model):
     @api.depends('product_id')
     def _compute_location_id(self):
         """
-        Calcula la ubicación asociada a cada línea de valoración.
+        Calcula la ubicación donde hay unidades disponibles para el producto en la valoración.
         """
         for record in self:
-            # Encuentra la ubicación de los quants relacionados
+            # Buscar los quants con cantidades disponibles para el producto
             quant = self.env['stock.quant'].search([
-                ('product_id', '=', record.product_id.id)
-            ], limit=1)  # Opcional: ajusta la lógica según tus necesidades
+                ('product_id', '=', record.product_id.id),
+                ('quantity', '>', 0)
+            ], limit=1)
+            
+            # Asignar la ubicación del quant encontrado
             record.location_id = quant.location_id if quant else False
 
 
