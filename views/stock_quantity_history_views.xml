@@ -66,6 +66,11 @@
                 <field name="lot_id" string="Lote"/>
                 <field name="quantity" string="Cantidad"/>
                 <field name="location_id" string="Ubicación"/>
+                <field name="unit_value" string="Precio Promedio Unitario"/>
+                <field name="total_valuation" string="Valor Total Valorizado"/>
+                <field name="valuation_account_id" string="Cuenta Contable"/>
+                <field name="move_type" string="Tipo de Movimiento"/>
+                <field name="last_move_date" string="Último Movimiento"/>
             </xpath>
         </field>
     </record>

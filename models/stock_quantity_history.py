@@ -214,6 +214,33 @@ class StockQuant(models.Model):
         store=False
     )
 
+    unit_value = fields.Float(
+        string='Precio Promedio Unitario',
+        compute='_compute_unit_value', store=False
+    )
+
+    total_valuation = fields.Float(
+        string='Valor Total Valorizado',
+        compute='_compute_total_valuation', store=False
+    )
+
+    valuation_account_id = fields.Many2one(
+        'account.account',
+        string='Cuenta Contable',
+        compute='_compute_valuation_account', store=False
+    )
+
+    move_type = fields.Selection(
+        [('purchase', 'Compra'), ('internal', 'Transferencia Interna')],
+        string='Tipo Movimiento',
+        compute='_compute_move_info', store=False
+    )
+
+    last_move_date = fields.Datetime(
+        string='Último Movimiento',
+        compute='_compute_last_move_date', store=False
+    )
+
     def _compute_valuation_value(self):
         """
         Calcula el valor total valorizado para cada `stock.quant`.
@@ -246,6 +273,44 @@ class StockQuant(models.Model):
                     total_quantity -= move.product_qty
 
             quant.weighted_average_price = total_value / total_quantity if total_quantity > 0 else product.standard_price
+
+    @api.depends('product_id')
+    def _compute_unit_value(self):
+        for quant in self:
+            quant.unit_value = quant.product_id.standard_price
+
+    @api.depends('quantity', 'unit_value')
+    def _compute_total_valuation(self):
+        for quant in self:
+            quant.total_valuation = quant.quantity * quant.unit_value
+
+    @api.depends('product_id')
+    def _compute_valuation_account(self):
+        for quant in self:
+            quant.valuation_account_id = quant.product_id.categ_id.property_stock_valuation_account_id
+
+    @api.depends('product_id')
+    def _compute_move_info(self):
+        for quant in self:
+            last_move = self.env['stock.move'].search(
+                [('product_id', '=', quant.product_id.id)],
+                order='date desc',
+                limit=1
+            )
+            if last_move:
+                quant.move_type = 'purchase' if last_move.picking_type_id.code == 'incoming' else 'internal'
+            else:
+                quant.move_type = False
+
+    @api.depends('product_id')
+    def _compute_last_move_date(self):
+        for quant in self:
+            last_move = self.env['stock.move'].search(
+                [('product_id', '=', quant.product_id.id)],
+                order='date desc',
+                limit=1
+            )
+            quant.last_move_date = last_move.date if last_move else False
 
 
 
