@@ -69,7 +69,6 @@
                 <field name="lot_id" string="Lote"/>
                 <field name="quantity" string="Cantidad"/>
                 <field name="location_id" string="Ubicación"/>
-                <field name="cost" string="Costo Unitario"/>
             </xpath>
         </field>
     </record>
