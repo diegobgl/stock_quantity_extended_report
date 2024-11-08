@@ -1,5 +1,33 @@
 from odoo import models, fields, api, _
 
+class StockQuantityHistory(models.TransientModel):
+    _inherit = 'stock.quantity.history'
+
+    def open_at_date(self):
+        """
+        Modificación del método open_at_date para agrupar primero por ubicación y luego por producto.
+        """
+        # Obtenemos la vista tree de stock.quant que contiene información sobre las ubicaciones y productos
+        tree_view_id = self.env.ref('stock.view_stock_quant_tree').id
+
+        # Definimos la acción para abrir los resultados en la vista tree
+        action = {
+            'type': 'ir.actions.act_window',
+            'views': [(tree_view_id, 'tree')],
+            'view_mode': 'tree',
+            'name': _('Product Quantities by Location'),
+            'res_model': 'stock.quant',
+            'domain': [('product_id.type', '=', 'product')],
+            'context': dict(self.env.context, to_date=self.inventory_datetime),
+            'display_name': format_datetime(self.env, self.inventory_datetime),
+            'group_by': ['location_id', 'product_id'],  # Agrupar primero por ubicación y luego por producto
+        }
+
+        return action
+
+
+
+
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
@@ -92,7 +120,6 @@ class ProductProduct(models.Model):
             quant_records = self.env['stock.quant'].search([('product_id', '=', product.id)])
             product.total_valuation = sum(quant_records.mapped(lambda q: q.quantity * q.product_id.standard_price))
 
-    @api.depends('stock_quant_ids')
     def _compute_lot_ids(self):
         for product in self:
             quants = product.stock_quant_ids.filtered(lambda q: q.quantity > 0)
