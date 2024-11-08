@@ -1,28 +1,22 @@
 <odoo>
-    <!--record id="view_product_tree_inherit_stock_history_location_group" model="ir.ui.view">
-        <field name="name">product.product.tree.inherit.stock.history.location.group</field>
+    <record id="view_product_tree_extended" model="ir.ui.view">
+        <field name="name">product.product.tree.extended</field>
         <field name="model">product.product</field>
-        <field name="inherit_id" ref="stock.view_stock_product_tree"/>
+        <field name="inherit_id" ref="product.product_tree_view"/>
         <field name="arch" type="xml">
-            < Añadir el campo `location_ids` al final de la vista >
             <xpath expr="//tree" position="inside">
-                <field name="location_ids" widget="many2many_tags" string="Locations"/>
+                <field name="unit_value" string="Precio Unitario Promedio"/>
+                <field name="total_valuation" string="Valor Total Valorizado"/>
+                <field name="valuation_account_id" string="Cuenta Contable"/>
             </xpath>
         </field>
-    </record-->
+    </record>
 
-    <!--record id="view_stock_quant_tree_inherit" model="ir.ui.view">
-        <field name="name">stock.quant.tree.inherit</field>
-        <field name="model">stock.quant</field>
-        <field name="inherit_id" ref="stock.view_stock_quant_tree"/>
-        <field name="arch" type="xml">
-            < Modificamos la vista tree para ajustar el orden de los campos si es necesario >
-            <xpath expr="//tree" position="inside">
-                <Mover el campo `location_id` para que esté en una posición destacada >
-                <field name="location_id" string="Location"/>
-            </xpath>
-        </field>
-    </record-->
+
+    
+
+
+
 
 
 

@@ -1,31 +1,4 @@
 from odoo import models, fields, api, _
-from odoo.tools.misc import format_datetime
-from odoo.osv import expression
-
-class StockQuantityHistory(models.TransientModel):
-    _inherit = 'stock.quantity.history'
-
-    def open_at_date(self):
-        """
-        Modificación del método `open_at_date` para agrupar primero por ubicación y luego por producto.
-        """
-        # Obtenemos la vista tree de `stock.quant` que contiene información sobre las ubicaciones y productos
-        tree_view_id = self.env.ref('stock.view_stock_quant_tree').id
-
-        # Definimos la acción para abrir los resultados en la vista tree
-        action = {
-            'type': 'ir.actions.act_window',
-            'views': [(tree_view_id, 'tree')],
-            'view_mode': 'tree',
-            'name': _('Product Quantities by Location'),
-            'res_model': 'stock.quant',
-            'domain': [('product_id.type', '=', 'product')],
-            'context': dict(self.env.context, to_date=self.inventory_datetime),
-            'display_name': format_datetime(self.env, self.inventory_datetime),
-            'group_by': ['location_id', 'product_id'],  # Agrupar primero por ubicación y luego por producto
-        }
-
-        return action
 
 class ProductProduct(models.Model):
     _inherit = 'product.product'
@@ -49,6 +22,24 @@ class ProductProduct(models.Model):
     valuation_value = fields.Float(
         string='Valorizado',
         compute='_compute_valuation_value', store=False
+    )
+
+    unit_value = fields.Float(
+        string='Precio Promedio Unitario',
+        compute='_compute_unit_value', store=False
+    )
+
+    total_valuation = fields.Float(
+        string='Valor Total Valorizado',
+        compute='_compute_total_valuation', store=False
+    )
+
+    valuation_account_id = fields.Many2one(
+        'account.account',
+        string='Cuenta Contable de Valorización',
+        related='categ_id.property_stock_valuation_account_id',
+        readonly=True,
+        store=True
     )
 
     def _compute_location_ids(self):
@@ -80,3 +71,16 @@ class ProductProduct(models.Model):
             # Valorización = Cantidad * Costo Unitario
             product.valuation_value = quantity * product.standard_price
 
+    def _compute_unit_value(self):
+        for product in self:
+            # Calcula el precio promedio ponderado basado en movimientos de stock
+            quant_records = self.env['stock.quant'].search([('product_id', '=', product.id)])
+            total_quantity = sum(quant_records.mapped('quantity'))
+            total_value = sum(quant_records.mapped(lambda q: q.quantity * q.product_id.standard_price))
+            product.unit_value = total_value / total_quantity if total_quantity > 0 else 0
+
+    def _compute_total_valuation(self):
+        for product in self:
+            # Calcular el valor total valorizado considerando el inventario actual
+            quant_records = self.env['stock.quant'].search([('product_id', '=', product.id)])
+            product.total_valuation = sum(quant_records.mapped(lambda q: q.quantity * q.product_id.standard_price))
