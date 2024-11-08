@@ -24,7 +24,7 @@
         <field name="arch" type="xml">
             <xpath expr="//tree" position="inside">
                 <field name="last_move_date" string="Último Movimiento" />
-                <field name="location_id" string="Ubicación" />
+                <field name="warehouse_id" string="Ubicación" />
                 <field name="move_type" string="Tipo Movimiento" />
                 <field name="valuation_value" string="Valorizado" />
             </xpath>
