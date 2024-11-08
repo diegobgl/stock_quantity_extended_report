@@ -355,17 +355,19 @@ class StockValuationLayer(models.Model):
     @api.depends('product_id')
     def _compute_location_id(self):
         """
-        Calcula la ubicación donde hay unidades disponibles para el producto en la valoración.
+        Calcula la última ubicación física asociada al producto.
         """
         for record in self:
-            # Buscar los quants con cantidades disponibles para el producto
-            quant = self.env['stock.quant'].search([
+            # Filtrar los movimientos completados para el producto
+            moves = self.env['stock.move'].search([
                 ('product_id', '=', record.product_id.id),
-                ('quantity', '>', 0)
-            ], limit=1)
-            
-            # Asignar la ubicación del quant encontrado
-            record.location_id = quant.location_id if quant else False
+                ('state', '=', 'done'),
+                ('location_dest_id.usage', '=', 'internal')  # Solo ubicaciones físicas internas
+            ], order="date desc", limit=1)
+
+            # Asignar la ubicación destino del movimiento más reciente
+            record.location_id = moves.location_dest_id if moves else False
+
 
 
     @api.depends('product_id')
