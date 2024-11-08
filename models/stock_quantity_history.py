@@ -11,6 +11,30 @@ class StockQuantityHistoryExtended(models.TransientModel):
         domain="[('usage', 'in', ['internal', 'transit'])]"
     )
 
+    def open_detailed_view(self):
+        """
+        Consulta alternativa que utiliza stock.quants para mostrar productos, ubicaciones y lotes.
+        """
+        tree_view_id = self.env.ref('stock.view_stock_quant_tree').id  # Vista original de stock.quant
+
+        domain = [('product_id.type', '=', 'product')]
+        if self.inventory_datetime:
+            domain.append(('in_date', '<=', self.inventory_datetime))  # Filtra por fecha
+        if self.location_id:
+            domain.append(('location_id', '=', self.location_id.id))  # Filtra por ubicación si está especificada
+
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': _('Detailed Product Quantities'),
+            'res_model': 'stock.quant',
+            'view_mode': 'tree',
+            'views': [(tree_view_id, 'tree')],
+            'domain': domain,
+            'context': dict(self.env.context, to_date=self.inventory_datetime),
+        }
+        return action
+
+
     def open_at_date(self):
         active_model = self.env.context.get('active_model')
 
