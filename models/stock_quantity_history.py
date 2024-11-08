@@ -346,6 +346,26 @@ class StockValuationLayer(models.Model):
         compute='_compute_last_move_date', store=False
     )
 
+    location_id = fields.Many2one(
+        'stock.location',
+        string='Ubicación',
+        compute='_compute_location_id',
+        store=True,
+    )
+
+    @api.depends('product_id')
+    def _compute_location_id(self):
+        """
+        Calcula la ubicación asociada a cada línea de valoración.
+        """
+        for record in self:
+            # Encuentra la ubicación de los quants relacionados
+            quant = self.env['stock.quant'].search([
+                ('product_id', '=', record.product_id.id)
+            ], limit=1)  # Opcional: ajusta la lógica según tus necesidades
+            record.location_id = quant.location_id if quant else False
+
+
     @api.depends('product_id')
     def _compute_unit_value(self):
         """
