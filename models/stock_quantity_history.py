@@ -355,18 +355,23 @@ class StockValuationLayer(models.Model):
     @api.depends('product_id')
     def _compute_location_id(self):
         """
-        Calcula la última ubicación física asociada al producto.
+        Calcula la ubicación final para cada producto basado en su último movimiento.
         """
         for record in self:
-            # Filtrar los movimientos completados para el producto
-            moves = self.env['stock.move'].search([
+            if not record.product_id:
+                record.location_id = False
+                continue
+
+            # Buscar el último movimiento relacionado con el producto y completado
+            last_move = self.env['stock.move'].search([
                 ('product_id', '=', record.product_id.id),
                 ('state', '=', 'done'),
-                ('location_dest_id.usage', '=', 'internal')  # Solo ubicaciones físicas internas
-            ], order="date desc", limit=1)
+                ('location_dest_id.usage', '=', 'internal')  # Solo ubicaciones internas físicas
+            ], order='date desc', limit=1)
 
-            # Asignar la ubicación destino del movimiento más reciente
-            record.location_id = moves.location_dest_id if moves else False
+            # Asignar la ubicación destino del último movimiento encontrado
+            record.location_id = last_move.location_dest_id if last_move else False
+
 
 
 
