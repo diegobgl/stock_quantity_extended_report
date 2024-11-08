@@ -1,7 +1,6 @@
 from odoo import models, fields, api, _
 from odoo.tools.misc import format_datetime
 from odoo.osv import expression
-import logging
 
 
 class StockQuantityHistoryExtended(models.TransientModel):
@@ -47,7 +46,6 @@ class StockQuantityHistoryExtended(models.TransientModel):
 
 class ProductProduct(models.Model):
     _inherit = 'product.product'
-    _logger = logging.getLogger(__name__)
 
     location_ids = fields.Many2many(
         'stock.location', string='Ubicaciones',
@@ -96,15 +94,16 @@ class ProductProduct(models.Model):
 
     def _compute_lot_ids(self):
         """Computa los lotes disponibles para el producto hasta la fecha consultada."""
-        to_date = self.env.context.get('to_date')
-        _logger.info(f"Computing lot_ids with to_date: {to_date}")
+        to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
         for product in self:
             domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
             if to_date:
-                domain.append(('in_date', '<=', to_date))
+                domain.append(('in_date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
             quants = self.env['stock.quant'].search(domain)
-            lot_ids = quants.mapped('lot_id').filtered(lambda lot: lot.exists())
-            product.lot_ids = [(6, 0, lot_ids.ids)]
+
+            # Obtener lotes válidos
+            lot_ids = quants.mapped('lot_id').filtered(lambda lot: lot.exists())  # Filtra lotes válidos
+            product.lot_ids = [(6, 0, lot_ids.ids)]  # Asignar correctamente valores a un campo Many2many
 
     def _compute_last_move_info(self):
         for product in self:
