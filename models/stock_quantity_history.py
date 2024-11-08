@@ -314,24 +314,87 @@ class StockQuant(models.Model):
 
 
 
+from odoo import models, fields, api
+
 class StockValuationLayer(models.Model):
     _inherit = 'stock.valuation.layer'
 
-    location_id = fields.Many2one('stock.location', string='Ubicación', readonly=True)
-    last_move_date = fields.Datetime(string='Último Movimiento', readonly=True)
+    unit_value = fields.Float(
+        string='Precio Promedio Unitario',
+        compute='_compute_unit_value', store=False
+    )
+
+    total_valuation = fields.Float(
+        string='Valor Total Valorizado',
+        compute='_compute_total_valuation', store=False
+    )
+
+    valuation_account_id = fields.Many2one(
+        'account.account',
+        string='Cuenta Contable',
+        compute='_compute_valuation_account', store=False
+    )
+
     move_type = fields.Selection(
         [('purchase', 'Compra'), ('internal', 'Transferencia Interna')],
-        string='Tipo Movimiento', readonly=True
+        string='Tipo Movimiento',
+        compute='_compute_move_type', store=False
     )
-    valuation_value = fields.Float(string='Valorizado', readonly=True)
+
+    last_move_date = fields.Datetime(
+        string='Último Movimiento',
+        compute='_compute_last_move_date', store=False
+    )
 
     @api.depends('product_id')
-    def _compute_location_ids(self):
-        for record in self:
-            # Busca las ubicaciones donde hay disponibilidad del producto
-            quants = self.env['stock.quant'].search([
-                ('product_id', '=', record.product_id.id),
-                ('quantity', '>', 0),
-            ])
-            record.location_ids = quants.mapped('location_id')
+    def _compute_unit_value(self):
+        """
+        Calcula el precio promedio unitario para el producto.
+        """
+        for layer in self:
+            layer.unit_value = layer.product_id.standard_price
 
+    @api.depends('quantity', 'unit_value')
+    def _compute_total_valuation(self):
+        """
+        Calcula el valor total valorizado para el producto en el `valuation.layer`.
+        """
+        for layer in self:
+            layer.total_valuation = layer.quantity * layer.unit_value
+
+    @api.depends('product_id')
+    def _compute_valuation_account(self):
+        """
+        Obtiene la cuenta contable asociada a la categoría del producto.
+        """
+        for layer in self:
+            layer.valuation_account_id = layer.product_id.categ_id.property_stock_valuation_account_id
+
+    @api.depends('product_id')
+    def _compute_move_type(self):
+        """
+        Determina el tipo de movimiento asociado al producto.
+        """
+        for layer in self:
+            last_move = self.env['stock.move'].search(
+                [('product_id', '=', layer.product_id.id)],
+                order='date desc',
+                limit=1
+            )
+            if last_move:
+                layer.move_type = 'purchase' if last_move.picking_type_id.code == 'incoming' else 'internal'
+            else:
+                layer.move_type = False
+
+    @api.depends('product_id')
+    def _compute_last_move_date(self):
+        """
+        Obtiene la fecha del último movimiento del producto.
+        """
+        for layer in self:
+            last_move = self.env['stock.move'].search(
+                [('product_id', '=', layer.product_id.id)],
+                order='date desc',
+                limit=1
+            )
+            layer.last_move_date = last_move.date if last_move else False
