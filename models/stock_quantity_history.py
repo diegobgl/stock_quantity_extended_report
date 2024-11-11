@@ -352,26 +352,27 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
-    @api.depends('product_id', 'stock_move_id')
+    @api.depends('product_id')
     def _compute_location_id(self):
         """
-        Determina la ubicación real basada en el movimiento asociado a la capa de valoración.
+        Computa la ubicación final para cada producto basado en los movimientos de inventario.
         """
         for record in self:
-            if not record.product_id or not record.stock_move_id:
-                record.location_id = False
-                continue
-
-            # Obtener el movimiento relacionado
-            stock_move = record.stock_move_id
-
-            # Usar la ubicación destino del movimiento
-            if stock_move.location_dest_id.usage == 'internal':
-                # Ubicación final (si es interna)
-                record.location_id = stock_move.location_dest_id
+            # Filtramos los movimientos relacionados al producto y a la fecha
+            domain = [
+                ('product_id', '=', record.product_id.id),
+                ('state', '=', 'done'),  # Asegurarse de incluir solo movimientos confirmados
+                ('date', '<=', record.create_date)  # Considerar movimientos hasta la fecha de valoración
+            ]
+            moves = self.env['stock.move'].search(domain, order='date desc', limit=1)
+            
+            if moves:
+                # Usamos la ubicación destino si es un movimiento de entrada, de lo contrario la ubicación origen
+                record.location_id = moves.location_dest_id if moves.picking_type_id.code in ['incoming', 'internal'] else moves.location_id
             else:
-                # Dejar vacío si no es interna
+                # Si no se encuentran movimientos, dejamos la ubicación vacía
                 record.location_id = False
+
 
 
     @api.depends('product_id')
