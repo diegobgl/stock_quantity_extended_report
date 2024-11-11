@@ -352,33 +352,26 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
-    @api.depends('product_id')
+    @api.depends('product_id', 'stock_move_id')
     def _compute_location_id(self):
         """
-        Determina la ubicación real basada en la cantidad disponible en stock.quant.
+        Determina la ubicación real basada en el movimiento asociado a la capa de valoración.
         """
         for record in self:
-            if not record.product_id:
+            if not record.product_id or not record.stock_move_id:
                 record.location_id = False
                 continue
 
-            # Buscar quants para el producto en ubicaciones internas
-            quants = self.env['stock.quant'].search([
-                ('product_id', '=', record.product_id.id),
-                ('quantity', '>', 0),  # Solo ubicaciones con stock disponible
-                ('location_id.usage', '=', 'internal')  # Solo ubicaciones físicas
-            ])
+            # Obtener el movimiento relacionado
+            stock_move = record.stock_move_id
 
-            # Identificar la ubicación con mayor cantidad disponible
-            if quants:
-                # Ordenar quants por cantidad (descendente) y tomar la ubicación
-                sorted_quants = sorted(quants, key=lambda q: q.quantity, reverse=True)
-                record.location_id = sorted_quants[0].location_id
+            # Usar la ubicación destino del movimiento
+            if stock_move.location_dest_id.usage == 'internal':
+                # Ubicación final (si es interna)
+                record.location_id = stock_move.location_dest_id
             else:
+                # Dejar vacío si no es interna
                 record.location_id = False
-
-
-
 
 
     @api.depends('product_id')
