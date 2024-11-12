@@ -352,32 +352,30 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
-    @api.depends('product_id')
+    @api.depends('product_id', 'quantity', 'create_date')
     def _compute_location_id(self):
         """
-        Determina la ubicación real del producto basándose en el inventario disponible.
+        Determina la ubicación real del producto basado en el inventario disponible a la fecha del registro.
         """
         for record in self:
-            if record.product_id:
-                # Buscar quants relevantes para el producto con cantidad disponible
+            if record.product_id and record.create_date:
+                # Buscar los quants válidos para el producto y fecha
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', record.product_id.id),
-                    ('quantity', '>', 0),
-                    ('location_id.usage', 'in', ['internal', 'transit'])
+                    ('quantity', '>', 0),  # Considerar solo cantidades disponibles
+                    ('in_date', '<=', record.create_date),  # Filtrar por fecha
+                    ('location_id.usage', 'in', ['internal', 'transit']),  # Excluir ubicaciones virtuales
                 ])
 
-                # Filtrar quants relevantes por fecha del registro
-                relevant_quants = quants.filtered(lambda q: q.in_date and q.in_date <= record.create_date)
-
-                # Si hay quants relevantes, asignar la ubicación con mayor cantidad disponible
-                if relevant_quants:
-                    # Ordenar por cantidad y tomar la ubicación principal
-                    best_quant = max(relevant_quants, key=lambda q: q.quantity)
+                # Ordenar por cantidad disponible y tomar la ubicación más relevante
+                if quants:
+                    best_quant = max(quants, key=lambda q: q.quantity)
                     record.location_id = best_quant.location_id
                 else:
                     record.location_id = False
             else:
                 record.location_id = False
+
 
 
 
