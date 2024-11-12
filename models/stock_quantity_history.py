@@ -352,7 +352,7 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
-    @api.depends('product_id', 'quantity', 'create_date')
+    @api.depends('product_id', 'quantity')
     def _compute_location_id(self):
         """
         Determina la ubicación real del producto basándose en la cantidad disponible a la fecha.
