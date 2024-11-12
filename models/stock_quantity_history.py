@@ -352,12 +352,24 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
+    @api.depends('product_id', 'create_date')
     def _compute_location_id(self):
         """
-        Versión simplificada: Asigna una ubicación fija para verificar instalación.
+        Determina la ubicación real del producto basada en stock.quant a la fecha especificada.
         """
         for record in self:
-            record.location_id = self.env['stock.location'].search([], limit=1).id
+            if record.product_id:
+                # Buscar los quants relevantes para el producto y la fecha
+                quant = self.env['stock.quant'].search([
+                    ('product_id', '=', record.product_id.id),
+                    ('quantity', '>', 0),
+                    ('in_date', '<=', record.create_date)  # Limitar por fecha
+                ], order='in_date desc', limit=1)
+
+                # Asignar la ubicación si se encuentra
+                record.location_id = quant.location_id.id if quant else False
+            else:
+                record.location_id = False
 
     @api.depends('product_id')
     def _compute_unit_value(self):
