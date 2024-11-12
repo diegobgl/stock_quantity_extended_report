@@ -352,30 +352,32 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
-    @api.depends('product_id', 'quantity')
+    @api.depends('product_id', 'quantity', 'create_date')
     def _compute_location_id(self):
         """
-        Calcula la ubicación actual del producto basándose en `stock.quant`.
+        Determina la ubicación real del producto basándose en la cantidad disponible a la fecha.
         """
         for record in self:
             if record.product_id:
-                # Filtrar por producto y cantidad disponible > 0
+                # Filtrar stock.quants por producto y cantidad > 0
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', record.product_id.id),
-                    ('quantity', '>', 0)
+                    ('quantity', '>', 0),
                 ])
-                # Obtener ubicaciones únicas
-                locations = quants.mapped('location_id')
-                
-                # Si hay varias ubicaciones, asignar la más relevante
-                if locations:
-                    # Opcional: lógica para determinar la ubicación relevante
-                    # Aquí simplemente asignamos la primera ubicación encontrada
-                    record.location_id = locations[0]
+
+                # Filtrar las ubicaciones relevantes basándose en la fecha del registro
+                relevant_quants = quants.filtered(
+                    lambda q: q.create_date <= record.create_date
+                )
+
+                # Si hay ubicaciones relevantes, tomar la primera (puedes ajustar la lógica)
+                if relevant_quants:
+                    record.location_id = relevant_quants[0].location_id
                 else:
                     record.location_id = False
             else:
                 record.location_id = False
+
 
 
 
