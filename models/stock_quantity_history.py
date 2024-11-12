@@ -378,11 +378,6 @@ class StockValuationLayer(models.Model):
             else:
                 record.location_id = False
 
-
-
-
-
-
     @api.depends('product_id')
     def _compute_unit_value(self):
         """
