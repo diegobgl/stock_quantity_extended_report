@@ -381,6 +381,7 @@ class StockValuationLayer(models.Model):
 
 
 
+
     @api.depends('product_id')
     def _compute_unit_value(self):
         """
