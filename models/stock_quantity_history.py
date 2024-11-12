@@ -352,29 +352,25 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
+    @api.depends('product_id', 'create_date')
     def _compute_location_id(self):
         """
-        Computa la ubicación final del producto basada en el movimiento relacionado con la capa de valoración.
-        Considera todos los escenarios posibles, incluyendo movimientos sin picking asociado o movimientos de tránsito.
+        Computa la ubicación donde el producto está disponible actualmente.
+        Basado en los quants (`stock.quant`) en lugar de los movimientos (`stock.move_id`).
         """
         for record in self:
-            if record.stock_move_id:
-                move = record.stock_move_id
-                if move.picking_type_id:
-                    # Determina la ubicación según el tipo de operación
-                    if move.picking_type_id.code in ['incoming', 'internal']:
-                        record.location_id = move.location_dest_id
-                    elif move.picking_type_id.code == 'outgoing':
-                        record.location_id = move.location_id
-                    else:
-                        # En caso de otro tipo, intenta determinar destino o origen
-                        record.location_id = move.location_dest_id or move.location_id
-                else:
-                    # Si no hay tipo de operación, usa el destino o el origen según corresponda
-                    record.location_id = move.location_dest_id or move.location_id
+            if record.product_id:
+                # Consultar quants del producto filtrados por cantidad positiva
+                quant = self.env['stock.quant'].search([
+                    ('product_id', '=', record.product_id.id),
+                    ('quantity', '>', 0)
+                ], limit=1, order='in_date desc')
+                
+                # Asignar la ubicación del quant
+                record.location_id = quant.location_id if quant else False
             else:
-                # Si no hay movimiento relacionado, intenta buscar la ubicación desde el contexto del producto
                 record.location_id = False
+
 
 
 
