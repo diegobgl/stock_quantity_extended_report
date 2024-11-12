@@ -352,30 +352,33 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
-    @api.depends('product_id', 'quantity')
+    @api.depends('product_id')
     def _compute_location_id(self):
         """
-        Determina la ubicación real del producto basándose en las cantidades disponibles
-        en `stock.quant` para la fecha del reporte.
+        Determina la ubicación real del producto basándose en el inventario disponible.
         """
         for record in self:
-            inventory_date = self.env.context.get('inventory_datetime') or fields.Datetime.now()
             if record.product_id:
-                # Filtrar los quants relevantes
+                # Buscar quants relevantes para el producto con cantidad disponible
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', record.product_id.id),
                     ('quantity', '>', 0),
+                    ('location_id.usage', 'in', ['internal', 'transit'])
                 ])
-                # Filtrar por fecha de creación si está disponible
-                relevant_quants = quants.filtered(lambda q: q.in_date <= inventory_date)
 
-                # Seleccionar la primera ubicación relevante
+                # Filtrar quants relevantes por fecha del registro
+                relevant_quants = quants.filtered(lambda q: q.in_date and q.in_date <= record.create_date)
+
+                # Si hay quants relevantes, asignar la ubicación con mayor cantidad disponible
                 if relevant_quants:
-                    record.location_id = relevant_quants.sorted(key=lambda q: q.in_date, reverse=True)[0].location_id
+                    # Ordenar por cantidad y tomar la ubicación principal
+                    best_quant = max(relevant_quants, key=lambda q: q.quantity)
+                    record.location_id = best_quant.location_id
                 else:
                     record.location_id = False
             else:
                 record.location_id = False
+
 
 
     @api.depends('product_id')
