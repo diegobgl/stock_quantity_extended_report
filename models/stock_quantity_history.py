@@ -354,25 +354,10 @@ class StockValuationLayer(models.Model):
 
     def _compute_location_id(self):
         """
-        Determina la ubicación real del producto basada en la cantidad disponible a la fecha.
+        Versión simplificada: Asigna una ubicación fija para verificar instalación.
         """
         for record in self:
-            if record.product_id:
-                # Usar un query SQL directo para mejorar rendimiento
-                self.env.cr.execute("""
-                    SELECT sq.location_id
-                    FROM stock_quant sq
-                    WHERE sq.product_id = %s
-                    AND sq.quantity > 0
-                    AND sq.in_date <= %s
-                    ORDER BY sq.in_date DESC
-                    LIMIT 1
-                """, (record.product_id.id, record.create_date))
-
-                result = self.env.cr.fetchone()
-                record.location_id = result[0] if result else False
-            else:
-                record.location_id = False
+            record.location_id = self.env['stock.location'].search([], limit=1).id
 
     @api.depends('product_id')
     def _compute_unit_value(self):
