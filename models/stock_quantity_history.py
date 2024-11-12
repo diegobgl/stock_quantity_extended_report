@@ -355,24 +355,23 @@ class StockValuationLayer(models.Model):
     @api.depends('product_id', 'quantity')
     def _compute_location_id(self):
         """
-        Determine the actual location of the product based on the available stock quantity at the time of the report.
+        Determina la ubicación real del producto basándose en las cantidades disponibles
+        en `stock.quant` para la fecha del reporte.
         """
         for record in self:
+            inventory_date = self.env.context.get('inventory_datetime') or fields.Datetime.now()
             if record.product_id:
-                # Filter stock.quants by product and non-zero quantities
+                # Filtrar los quants relevantes
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', record.product_id.id),
                     ('quantity', '>', 0),
                 ])
+                # Filtrar por fecha de creación si está disponible
+                relevant_quants = quants.filtered(lambda q: q.in_date <= inventory_date)
 
-                # Find the stock.quant that matches the valuation layer date and quantities
-                relevant_quants = quants.filtered(
-                    lambda q: q.location_id.usage in ['internal', 'transit'] and q.quantity > 0
-                )
-
-                # Use the first matching location from relevant quants
+                # Seleccionar la primera ubicación relevante
                 if relevant_quants:
-                    record.location_id = relevant_quants[0].location_id
+                    record.location_id = relevant_quants.sorted(key=lambda q: q.in_date, reverse=True)[0].location_id
                 else:
                     record.location_id = False
             else:
