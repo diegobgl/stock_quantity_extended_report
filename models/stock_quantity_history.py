@@ -352,32 +352,38 @@ class StockValuationLayer(models.Model):
         store=True,
     )
 
-    @api.depends('product_id', 'quantity', 'create_date')
+    @api.depends('product_id', 'create_date')
     def _compute_location_id(self):
         """
-        Determina la ubicación real del producto basado en el inventario disponible a la fecha del registro.
+        Determina la ubicación real del producto considerando las cantidades disponibles
+        en todas las ubicaciones, incluyendo las de tránsito.
         """
         for record in self:
             if record.product_id and record.create_date:
-                # Buscar los quants válidos para el producto y fecha
+                # Obtener los quants relevantes para el producto hasta la fecha del registro
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', record.product_id.id),
-                    ('quantity', '>', 0),  # Considerar solo cantidades disponibles
-                    ('in_date', '<=', record.create_date),  # Filtrar por fecha
-                    ('location_id.usage', 'in', ['internal', 'transit']),  # Excluir ubicaciones virtuales
+                    ('quantity', '>', 0),  # Cantidad disponible mayor a cero
+                    ('in_date', '<=', record.create_date),  # Filtrar por fecha de disponibilidad
+                    ('location_id.usage', 'in', ['internal', 'transit']),  # Incluir internas y de tránsito
                 ])
 
-                # Ordenar por cantidad disponible y tomar la ubicación más relevante
                 if quants:
-                    best_quant = max(quants, key=lambda q: q.quantity)
-                    record.location_id = best_quant.location_id
+                    # Agrupar las ubicaciones y cantidades
+                    location_quantities = {}
+                    for quant in quants:
+                        location = quant.location_id
+                        location_quantities[location] = location_quantities.get(location, 0) + quant.quantity
+
+                    # Determinar la ubicación con la mayor cantidad disponible
+                    best_location = max(location_quantities.items(), key=lambda x: x[1])[0]
+                    record.location_id = best_location
                 else:
+                    # Si no hay quants relevantes, dejar vacío
                     record.location_id = False
             else:
+                # Si no hay producto o fecha, dejar vacío
                 record.location_id = False
-
-
-
 
 
     @api.depends('product_id')
