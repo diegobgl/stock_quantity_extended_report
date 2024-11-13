@@ -9,8 +9,8 @@
                 <field name="last_move_date" string="Último Movimiento" readonly="1"/>
                 <field name="move_type" string="Tipo Movimiento" readonly="1"/>
                 <field name="valuation_value" string="Valorizado" readonly="1"/>
-                <field name="location_ids" string="Ubicación"  widget="many2many_tags"  />
-                <field name="lot_ids"  string="Lotes Disponibles"  widget="many2many_tags"/>
+                <!--field name="location_ids" string="Ubicación"  widget="many2many_tags"  />
+                <field name="lot_ids"  string="Lotes Disponibles"  widget="many2many_tags"/-->
                 <field name="valuation_account_id" string="Cuenta Contable de Valorización" readonly="1" />
             </xpath>
         </field>
