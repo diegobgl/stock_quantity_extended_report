@@ -458,20 +458,28 @@ class InventoryValuationWizard(models.TransientModel):
     def generate_report(self):
         """
         Genera el reporte basado en la fecha seleccionada.
+        Limpia registros anteriores antes de ejecutar la consulta.
         """
+        # Validación de la fecha
         if not self.report_date:
             raise UserError(_("Por favor, seleccione una fecha para generar el reporte."))
 
+        # Limpia la tabla de reportes para evitar duplicados
+        self.env['inventory.valuation.report'].sudo().search([]).unlink()
+
+        # Ejecuta la consulta SQL para regenerar la vista o poblar el modelo
+        self.env['inventory.valuation.report'].init()
+
+        # Configuración de la acción para mostrar el reporte
         action = {
             'type': 'ir.actions.act_window',
             'name': _('Reporte de Valorización de Inventario'),
             'res_model': 'inventory.valuation.report',
-            'view_mode': 'tree',
+            'view_mode': 'tree,form',
             'domain': [('valuation_date', '<=', self.report_date)],  # Filtro por fecha
             'context': {'default_report_date': self.report_date},
         }
         return action
-
 
 
 
