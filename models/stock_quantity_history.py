@@ -479,7 +479,7 @@ class InventoryValuationReport(models.Model):
     _name = 'inventory.valuation.report'
     _auto = False
     _description = 'Reporte de Valorización de Inventario con Ubicaciones'
-    
+
     valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
     product_id = fields.Many2one('product.product', string='Producto')
     location_id = fields.Many2one('stock.location', string='Ubicación')
@@ -508,19 +508,23 @@ class InventoryValuationReport(models.Model):
                     quant.lot_id AS lot_id,
                     quant.quantity AS quantity,
                     quant.reserved_quantity AS reserved_quantity,
-                    quant.quantity * quant.product_id.standard_price AS total_valuation,
+                    product.standard_price AS unit_value, -- Obtenemos el precio estándar del producto
+                    quant.quantity * product.standard_price AS total_valuation, -- Calculamos el valor total
                     quant.in_date AS stock_move_date,
                     valuation.create_date AS valuation_date,
                     valuation.account_move_id AS layer_account_move_id,
                     quant.account_move_id AS quant_account_move_id,
-                    valuation.unit_cost AS unit_value,
-                    quant.reserved_quantity AS reserved_quantity
+                    valuation.unit_cost AS valuation_unit_value
                 FROM
                     stock_quant AS quant
                 LEFT JOIN
                     stock_valuation_layer AS valuation
                 ON
                     quant.product_id = valuation.product_id
+                LEFT JOIN
+                    product_product AS product
+                ON
+                    quant.product_id = product.id -- Relacionamos con la tabla de productos
                 WHERE
                     quant.quantity > 0 OR valuation.quantity > 0
             )
