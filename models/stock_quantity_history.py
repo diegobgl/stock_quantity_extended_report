@@ -508,10 +508,11 @@ class InventoryValuationReport(models.Model):
                     quant.location_id,
                     quant.lot_id,
                     quant.quantity AS quantity,
-                    valuation.total_valuation,
-                    valuation.unit_value,
-                    valuation.account_move_id,
-                    COALESCE(valuation.create_date, quant.in_date) AS valuation_date  -- Aquí se incluye la fecha
+                    valuation.create_date AS valuation_date,
+                    valuation.quantity AS valuation_quantity,
+                    valuation.unit_cost AS valuation_unit_cost,
+                    (valuation.quantity * valuation.unit_cost) AS total_valuation, -- Calcular total_valuation
+                    valuation.account_move_id
                 FROM
                     stock_quant AS quant
                 FULL OUTER JOIN
