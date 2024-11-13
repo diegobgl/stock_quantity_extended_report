@@ -251,6 +251,20 @@ class StockQuant(models.Model):
         compute='_compute_last_move_date', store=False
     )
 
+    account_move_id = fields.Many2one(
+        'account.move', string='Asiento Contable', readonly=True
+    )
+
+    @api.depends('product_id', 'location_id')
+    def _compute_account_move(self):
+        for quant in self:
+            valuation_layer = self.env['stock.valuation.layer'].search([
+                ('product_id', '=', quant.product_id.id),
+                ('location_id', '=', quant.location_id.id),
+            ], limit=1)
+            quant.account_move_id = valuation_layer.account_move_id if valuation_layer else False
+
+
     def _compute_valuation_value(self):
         """
         Calcula el valor total valorizado para cada `stock.quant`.
