@@ -508,8 +508,8 @@ class InventoryValuationReport(models.Model):
                     quant.lot_id AS lot_id,
                     quant.quantity AS quantity,
                     quant.reserved_quantity AS reserved_quantity,
-                    template.standard_price AS unit_value, -- Obtenemos el precio estándar desde product_template
-                    quant.quantity * template.standard_price AS total_valuation, -- Calculamos el valor total
+                    COALESCE(valuation.unit_cost, 0) AS unit_value, -- Usar unit_cost de stock_valuation_layer como precio unitario
+                    quant.quantity * COALESCE(valuation.unit_cost, 0) AS total_valuation, -- Cálculo del valor total
                     quant.in_date AS stock_move_date,
                     valuation.create_date AS valuation_date,
                     valuation.account_move_id AS layer_account_move_id,
@@ -521,14 +521,6 @@ class InventoryValuationReport(models.Model):
                     stock_valuation_layer AS valuation
                 ON
                     quant.product_id = valuation.product_id
-                LEFT JOIN
-                    product_product AS product
-                ON
-                    quant.product_id = product.id -- Relacionamos con la tabla product_product
-                LEFT JOIN
-                    product_template AS template
-                ON
-                    product.product_tmpl_id = template.id -- Relacionamos con la tabla product_template
                 WHERE
                     quant.quantity > 0 OR valuation.quantity > 0
             )
@@ -539,3 +531,4 @@ class InventoryValuationReport(models.Model):
         Inicializa la vista del modelo.
         """
         self._create_view()
+
