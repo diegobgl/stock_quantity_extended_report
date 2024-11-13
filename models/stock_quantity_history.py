@@ -81,15 +81,15 @@ class StockQuantityHistoryExtended(models.TransientModel):
 class ProductProduct(models.Model):
     _inherit = 'product.product'
 
-    location_ids = fields.Many2many(
-        'stock.location', string='Ubicaciones',
-        compute='_compute_location_ids', store=False
-    )
+    # location_ids = fields.Many2many(
+    #     'stock.location', string='Ubicaciones',
+    #     compute='_compute_location_ids', store=False
+    # )
 
-    lot_ids = fields.Many2many(
-        'stock.lot', string='Lotes Disponibles',
-        compute='_compute_lot_ids', store=False
-    )
+    # lot_ids = fields.Many2many(
+    #     'stock.lot', string='Lotes Disponibles',
+    #     compute='_compute_lot_ids', store=False
+    # )
 
     valuation_account_id = fields.Many2one(
         'account.account', 
@@ -140,15 +140,15 @@ class ProductProduct(models.Model):
             total_value = sum(quant.quantity * quant.product_id.standard_price for quant in quant_records)
             product.unit_val
 
-    def _compute_location_ids(self):
-        """Computa las ubicaciones donde está disponible el producto hasta la fecha consultada."""
-        to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
-        for product in self:
-            domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
-            if to_date:
-                domain.append(('in_date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
-            quants = self.env['stock.quant'].search(domain)
-            product.location_ids = quants.mapped('location_id')
+    # def _compute_location_ids(self):
+    #     """Computa las ubicaciones donde está disponible el producto hasta la fecha consultada."""
+    #     to_date = self.env.context.get('to_date')  # Fecha límite para consultar disponibilidad
+    #     for product in self:
+    #         domain = [('product_id', '=', product.id), ('quantity', '>', 0)]
+    #         if to_date:
+    #             domain.append(('in_date', '<=', to_date))  # Considerar solo movimientos hasta la fecha
+    #         quants = self.env['stock.quant'].search(domain)
+    #         product.location_ids = quants.mapped('location_id')
 
     def _compute_lot_ids(self):
         """Computa los lotes disponibles para el producto hasta la fecha consultada."""
@@ -432,3 +432,87 @@ class StockValuationLayer(models.Model):
                 limit=1
             )
             layer.last_move_date = last_move.date if last_move else False
+
+
+
+class InventoryValuationWizard(models.TransientModel):
+    _name = 'inventory.valuation.wizard'
+    _description = 'Wizard para Generar Reporte de Valorización de Inventario'
+
+    report_date = fields.Date(string='Fecha del Reporte', required=True, default=fields.Date.context_today)
+
+    def generate_report(self):
+        """
+        Genera el reporte basado en la fecha seleccionada.
+        """
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': _('Reporte de Valorización de Inventario'),
+            'res_model': 'inventory.valuation.report',
+            'view_mode': 'tree,form',
+            'domain': [('valuation_date', '<=', self.report_date)],
+            'context': {'default_report_date': self.report_date},
+        }
+        return action
+
+
+class InventoryValuationReport(models.Model):
+    _name = 'inventory.valuation.report'
+    _auto = False
+    _description = 'Reporte de Valorización de Inventario con Ubicaciones'
+
+    product_id = fields.Many2one('product.product', string='Producto')
+    location_id = fields.Many2one('stock.location', string='Ubicación')
+    lot_id = fields.Many2one('stock.lot', string='Lote')
+    quantity = fields.Float(string='Cantidad Disponible')
+    reserved_quantity = fields.Float(string='Cantidad Reservada')
+    unit_value = fields.Float(string='Precio Promedio Unitario')
+    total_valuation = fields.Float(string='Valor Total Valorizado')
+    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)')
+    quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)')
+    valuation_date = fields.Datetime(string='Fecha de Valorización')
+    stock_move_date = fields.Datetime(string='Fecha del Movimiento')
+    move_reference = fields.Char(string='Referencia del Movimiento')
+
+    @api.model
+    def _create_view(self):
+        """
+        Crear la vista SQL para el modelo `inventory.valuation.report`.
+        """
+        self.env.cr.execute("""
+            CREATE OR REPLACE VIEW inventory_valuation_report AS (
+                SELECT
+                    row_number() OVER () AS id,
+                    quant.product_id AS product_id,
+                    quant.location_id AS location_id,
+                    quant.lot_id AS lot_id,
+                    quant.quantity AS quantity,
+                    quant.reserved_quantity AS reserved_quantity,
+                    COALESCE(valuation.unit_cost, 0.0) AS unit_value,
+                    COALESCE(valuation.value, 0.0) AS total_valuation,
+                    valuation.account_move_id AS layer_account_move_id,
+                    quant.account_move_id AS quant_account_move_id,
+                    valuation.create_date AS valuation_date,
+                    move.date AS stock_move_date,
+                    move.reference AS move_reference
+                FROM
+                    stock_quant quant
+                LEFT JOIN
+                    stock_move move
+                ON
+                    quant.location_id = move.location_dest_id
+                    AND quant.product_id = move.product_id
+                LEFT JOIN
+                    stock_valuation_layer valuation
+                ON
+                    move.id = valuation.stock_move_id
+                    AND quant.product_id = valuation.product_id
+                WHERE
+                    quant.quantity > 0
+                    AND quant.create_date <= CURRENT_DATE
+                    AND (valuation.create_date IS NULL OR valuation.create_date <= CURRENT_DATE)
+            );
+        """)
+
+    def init(self):
+        self._create_view()
