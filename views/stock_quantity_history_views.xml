@@ -79,42 +79,4 @@
     </record>
 
 
-    <record id="view_inventory_valuation_wizard_form" model="ir.ui.view">
-        <field name="name">inventory.valuation.wizard.form</field>
-        <field name="model">inventory.valuation.wizard</field>
-        <field name="arch" type="xml">
-            <form string="Generar Reporte de Valorización de Inventario">
-                <group>
-                    <field name="report_date"/>
-                </group>
-                <footer>
-                    <button string="Generar" type="object" name="generate_report" class="btn-primary"/>
-                    <button string="Cancelar" class="btn-secondary" special="cancel"/>
-                </footer>
-            </form>
-        </field>
-    </record>
-
-    <record id="action_inventory_valuation_wizard" model="ir.actions.act_window">
-        <field name="name">Reporte de Valorización de Inventario</field>
-        <field name="res_model">inventory.valuation.wizard</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
-    </record>
-
-    <menuitem id="menu_inventory_valuation_wizard" name="Generar Reporte de Valorización"
-            parent="stock.menu_stock_root"
-            action="action_inventory_valuation_wizard"/>
-
-    <record id="action_inventory_valuation_report" model="ir.actions.act_window">
-        <field name="name">Reporte de Valorización de Inventario</field>
-        <field name="res_model">inventory.valuation.report</field>
-        <field name="view_mode">tree,form</field>
-        <field name="context">{}</field>
-    </record>
-
-    <menuitem id="menu_inventory_valuation_report" name="Valorización de Inventario"
-            parent="stock.menu_stock_root"
-            action="action_inventory_valuation_report"/>
-
 </odoo>
