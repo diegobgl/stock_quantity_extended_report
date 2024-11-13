@@ -459,22 +459,29 @@ class InventoryValuationWizard(models.TransientModel):
         """
         Genera el reporte basado en la fecha seleccionada.
         """
+        # Validación de la fecha
+        if not self.report_date:
+            raise UserError(_("Por favor, seleccione una fecha para generar el reporte."))
+
+        # Configuración de la acción para mostrar el reporte
         action = {
             'type': 'ir.actions.act_window',
             'name': _('Reporte de Valorización de Inventario'),
             'res_model': 'inventory.valuation.report',
             'view_mode': 'tree,form',
-            'domain': [('valuation_date', '<=', self.report_date)],
+            'domain': [('valuation_date', '<=', self.report_date)],  # Filtro por fecha
             'context': {'default_report_date': self.report_date},
         }
         return action
+
 
 
 class InventoryValuationReport(models.Model):
     _name = 'inventory.valuation.report'
     _auto = False
     _description = 'Reporte de Valorización de Inventario con Ubicaciones'
-
+    
+    valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
     product_id = fields.Many2one('product.product', string='Producto')
     location_id = fields.Many2one('stock.location', string='Ubicación')
     lot_id = fields.Many2one('stock.lot', string='Lote')
@@ -496,37 +503,26 @@ class InventoryValuationReport(models.Model):
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW inventory_valuation_report AS (
                 SELECT
-                    row_number() OVER () AS id,
-                    quant.product_id AS product_id,
-                    quant.location_id AS location_id,
-                    quant.lot_id AS lot_id,
+                    ROW_NUMBER() OVER () AS id,
+                    quant.product_id,
+                    quant.location_id,
+                    quant.lot_id,
                     quant.quantity AS quantity,
-                    quant.reserved_quantity AS reserved_quantity,
-                    COALESCE(valuation.unit_cost, 0.0) AS unit_value,
-                    COALESCE(valuation.value, 0.0) AS total_valuation,
-                    valuation.account_move_id AS layer_account_move_id,
-                    quant.account_move_id AS quant_account_move_id,
-                    valuation.create_date AS valuation_date,
-                    move.date AS stock_move_date,
-                    move.reference AS move_reference
+                    valuation.total_valuation,
+                    valuation.unit_value,
+                    valuation.account_move_id,
+                    COALESCE(valuation.create_date, quant.in_date) AS valuation_date  -- Aquí se incluye la fecha
                 FROM
-                    stock_quant quant
-                LEFT JOIN
-                    stock_move move
+                    stock_quant AS quant
+                FULL OUTER JOIN
+                    stock_valuation_layer AS valuation
                 ON
-                    quant.location_id = move.location_dest_id
-                    AND quant.product_id = move.product_id
-                LEFT JOIN
-                    stock_valuation_layer valuation
-                ON
-                    move.id = valuation.stock_move_id
-                    AND quant.product_id = valuation.product_id
+                    quant.product_id = valuation.product_id
                 WHERE
-                    quant.quantity > 0
-                    AND quant.create_date <= CURRENT_DATE
-                    AND (valuation.create_date IS NULL OR valuation.create_date <= CURRENT_DATE)
-            );
+                    quant.quantity > 0 OR valuation.quantity > 0
+            )
         """)
+
 
     def init(self):
         self._create_view()
