@@ -459,20 +459,19 @@ class InventoryValuationWizard(models.TransientModel):
         """
         Genera el reporte basado en la fecha seleccionada.
         """
-        # Validación de la fecha
         if not self.report_date:
             raise UserError(_("Por favor, seleccione una fecha para generar el reporte."))
 
-        # Configuración de la acción para mostrar el reporte
         action = {
             'type': 'ir.actions.act_window',
             'name': _('Reporte de Valorización de Inventario'),
             'res_model': 'inventory.valuation.report',
-            'view_mode': 'tree,form',
+            'view_mode': 'tree',
             'domain': [('valuation_date', '<=', self.report_date)],  # Filtro por fecha
             'context': {'default_report_date': self.report_date},
         }
         return action
+
 
 
 
@@ -491,7 +490,6 @@ class InventoryValuationReport(models.Model):
     total_valuation = fields.Float(string='Valor Total Valorizado')
     layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)')
     quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)')
-    valuation_date = fields.Datetime(string='Fecha de Valorización')
     stock_move_date = fields.Datetime(string='Fecha del Movimiento')
     move_reference = fields.Char(string='Referencia del Movimiento')
 
@@ -500,22 +498,26 @@ class InventoryValuationReport(models.Model):
         """
         Crear la vista SQL para el modelo `inventory.valuation.report`.
         """
+        self.env.cr.execute("DROP VIEW IF EXISTS inventory_valuation_report CASCADE")
         self.env.cr.execute("""
             CREATE OR REPLACE VIEW inventory_valuation_report AS (
                 SELECT
                     ROW_NUMBER() OVER () AS id,
-                    quant.product_id,
-                    quant.location_id,
-                    quant.lot_id,
+                    quant.product_id AS product_id,
+                    quant.location_id AS location_id,
+                    quant.lot_id AS lot_id,
                     quant.quantity AS quantity,
+                    quant.reserved_quantity AS reserved_quantity,
+                    quant.quantity * quant.product_id.standard_price AS total_valuation,
+                    quant.in_date AS stock_move_date,
                     valuation.create_date AS valuation_date,
-                    valuation.quantity AS valuation_quantity,
-                    valuation.unit_cost AS valuation_unit_cost,
-                    (valuation.quantity * valuation.unit_cost) AS total_valuation, -- Calcular total_valuation
-                    valuation.account_move_id
+                    valuation.account_move_id AS layer_account_move_id,
+                    quant.account_move_id AS quant_account_move_id,
+                    valuation.unit_cost AS unit_value,
+                    quant.reserved_quantity AS reserved_quantity
                 FROM
                     stock_quant AS quant
-                FULL OUTER JOIN
+                LEFT JOIN
                     stock_valuation_layer AS valuation
                 ON
                     quant.product_id = valuation.product_id
@@ -524,6 +526,8 @@ class InventoryValuationReport(models.Model):
             )
         """)
 
-
     def init(self):
+        """
+        Inicializa la vista del modelo.
+        """
         self._create_view()
