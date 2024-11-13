@@ -508,8 +508,8 @@ class InventoryValuationReport(models.Model):
                     quant.lot_id AS lot_id,
                     quant.quantity AS quantity,
                     quant.reserved_quantity AS reserved_quantity,
-                    product.standard_price AS unit_value, -- Obtenemos el precio estándar del producto
-                    quant.quantity * product.standard_price AS total_valuation, -- Calculamos el valor total
+                    template.standard_price AS unit_value, -- Obtenemos el precio estándar desde product_template
+                    quant.quantity * template.standard_price AS total_valuation, -- Calculamos el valor total
                     quant.in_date AS stock_move_date,
                     valuation.create_date AS valuation_date,
                     valuation.account_move_id AS layer_account_move_id,
@@ -524,7 +524,11 @@ class InventoryValuationReport(models.Model):
                 LEFT JOIN
                     product_product AS product
                 ON
-                    quant.product_id = product.id -- Relacionamos con la tabla de productos
+                    quant.product_id = product.id -- Relacionamos con la tabla product_product
+                LEFT JOIN
+                    product_template AS template
+                ON
+                    product.product_tmpl_id = template.id -- Relacionamos con la tabla product_template
                 WHERE
                     quant.quantity > 0 OR valuation.quantity > 0
             )
