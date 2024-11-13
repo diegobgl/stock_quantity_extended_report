@@ -36,6 +36,9 @@ class StockQuantityHistoryExtended(models.TransientModel):
 
 
     def open_at_date(self):
+        """
+        Abre la vista en 'stock.valuation.layer' mostrando solo registros con asientos contables relacionados.
+        """
         active_model = self.env.context.get('active_model')
 
         if active_model == 'stock.valuation.layer':
@@ -43,28 +46,36 @@ class StockQuantityHistoryExtended(models.TransientModel):
             action = self.env["ir.actions.actions"]._for_xml_id("stock_account.stock_valuation_layer_action")
 
             # Configuración de vistas
-            tree_view = self.env.ref('your_module.stock_valuation_layer_valuation_at_date_tree_extended', raise_if_not_found=False)
-            graph_view = self.env.ref('stock_account.stock_valuation_layer_graph', raise_if_not_found=False)
+            tree_view = self.env.ref('stock_account.view_stock_valuation_layer_tree', raise_if_not_found=False)
+            form_view = self.env.ref('stock_account.stock_valuation_layer_form', raise_if_not_found=False)
+            pivot_view = self.env.ref('stock_account.stock_valuation_layer_pivot', raise_if_not_found=False)
+
             action['views'] = [
                 (tree_view.id if tree_view else False, 'tree'),
-                (self.env.ref('stock_account.stock_valuation_layer_form').id, 'form'),
-                (self.env.ref('stock_account.stock_valuation_layer_pivot').id, 'pivot'),
-                (graph_view.id if graph_view else False, 'graph')
+                (form_view.id if form_view else False, 'form'),
+                (pivot_view.id if pivot_view else False, 'pivot')
             ]
 
-            # Modificar el dominio para incluir `location_id` si está especificado
-            domain = [('create_date', '<=', self.inventory_datetime), ('product_id.type', '=', 'product')]
+            # Crear un dominio para filtrar solo los registros con movimientos asociados a asientos contables
+            domain = [
+                ('create_date', '<=', self.inventory_datetime),
+                ('product_id.type', '=', 'product'),
+                ('account_move_id', '!=', False)  # Filtrar registros con asiento contable
+            ]
             if self.location_id:
                 domain.append(('location_id', '=', self.location_id.id))
 
             action['domain'] = domain
-            action['display_name'] = format_datetime(self.env, self.inventory_datetime)
-            action['context'] = {"to_date": self.inventory_datetime}
+            action['display_name'] = _("Valuation Layers with Accounting Entries")
+            action['context'] = {
+                "to_date": self.inventory_datetime
+            }
 
             return action
 
-        # Comportamiento original para otros modelos
+        # Comportamiento original si no es 'stock.valuation.layer'
         return super(StockQuantityHistoryExtended, self).open_at_date()
+
 
 
 class ProductProduct(models.Model):
