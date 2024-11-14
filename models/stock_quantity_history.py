@@ -477,13 +477,25 @@ class InventoryValuationReport(models.Model):
     lot_id = fields.Many2one('stock.lot', string='Lote', readonly=True)
     quantity = fields.Float(string='Cantidad Disponible', readonly=True)
     reserved_quantity = fields.Float(string='Cantidad Reservada', readonly=True)
-    unit_value = fields.Float(string='Precio Promedio Unitario', readonly=True)
-    total_valuation = fields.Float(string='Valor Total Valorizado', readonly=True)
+    unit_value = fields.Float(string='Precio Promedio Unitario', compute='_compute_unit_value')
+    total_valuation = fields.Float(string='Valor Total Valorizado', compute='_compute_total_valuation')
     layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)', readonly=True)
     quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)', readonly=True)
     stock_move_date = fields.Datetime(string='Fecha del Movimiento', readonly=True)
     move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
     account_move_id = fields.Many2one('account.move', string='Asiento Contable General')  # Añadir este campo
+
+
+    @api.depends('product_id')
+    def _compute_unit_value(self):
+        for record in self:
+            record.unit_value = record.product_id.standard_price
+
+    @api.depends('quantity', 'unit_value')
+    def _compute_total_valuation(self):
+        for record in self:
+            record.total_valuation = record.quantity * record.unit_value
+
 
     def generate_data(self, report_date):
         """
@@ -515,8 +527,8 @@ class InventoryValuationReport(models.Model):
                 quant.lot_id AS lot_id,
                 quant.quantity AS quantity,
                 quant.reserved_quantity AS reserved_quantity,
-                COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value, -- Usa costo unitario o precio estándar
-                COALESCE(quant.quantity, 0) * COALESCE(valuation.unit_cost, pt.standard_price) AS total_valuation, -- Cálculo del valor total
+                COALESCE(valuation.unit_cost, 0) AS unit_value, -- Usa costo unitario o 0
+                COALESCE(quant.quantity, 0) * COALESCE(valuation.unit_cost, 0) AS total_valuation, -- Cálculo del valor total
                 valuation.account_move_id AS layer_account_move_id,
                 move.date AS stock_move_date,
                 move.reference AS move_reference
@@ -532,14 +544,6 @@ class InventoryValuationReport(models.Model):
                 valuation.product_id = quant.product_id
                 AND quant.quantity > 0
                 AND quant.in_date <= %s
-            LEFT JOIN
-                product_product AS pp
-            ON
-                quant.product_id = pp.id
-            LEFT JOIN
-                product_template AS pt
-            ON
-                pp.product_tmpl_id = pt.id
             WHERE
                 valuation.create_date <= %s
         """, (report_date, report_date))
