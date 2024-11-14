@@ -524,7 +524,7 @@ class InventoryValuationWizard(models.TransientModel):
         Genera el reporte basado en la fecha seleccionada.
         """
         # Limpiar registros antiguos
-        self.env['inventory.valuation.report'].clear()
+        self.env['inventory.valuation.report'].search([]).unlink()
 
         # Crear una consulta con filtro por fecha
         self.env.cr.execute("""
@@ -556,3 +556,4 @@ class InventoryValuationWizard(models.TransientModel):
             'view_mode': 'tree,form',
             'context': {'default_report_date': self.report_date},
         }
+
