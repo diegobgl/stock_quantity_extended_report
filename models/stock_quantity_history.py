@@ -414,9 +414,6 @@ class StockValuationLayer(models.Model):
                 record.location_id = False
 
 
-
-
-
     @api.depends('product_id')
     def _compute_unit_value(self):
         """
@@ -470,3 +467,92 @@ class StockValuationLayer(models.Model):
             )
             layer.last_move_date = last_move.date if last_move else False
 
+class InventoryValuationReport(models.Model):
+    _name = 'inventory.valuation.report'
+    _auto = False
+    _description = 'Reporte de Valorización de Inventario con Ubicaciones'
+
+    valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
+    product_id = fields.Many2one('product.product', string='Producto', readonly=True)
+    location_id = fields.Many2one('stock.location', string='Ubicación', readonly=True)
+    quantity = fields.Float(string='Cantidad Disponible', readonly=True)
+    unit_value = fields.Float(string='Precio Promedio Unitario', readonly=True)
+    total_valuation = fields.Float(string='Valor Total Valorizado', readonly=True)
+    account_move_id = fields.Many2one('account.move', string='Asiento Contable', readonly=True)
+
+    @api.model
+    def _create_view(self):
+        """
+        Crea la vista SQL que fusiona stock.valuation.layer y stock.quant.
+        """
+        self.env.cr.execute("""
+            CREATE OR REPLACE VIEW inventory_valuation_report AS (
+                SELECT
+                    ROW_NUMBER() OVER() AS id,
+                    valuation.create_date AS valuation_date,
+                    quant.product_id AS product_id,
+                    quant.location_id AS location_id,
+                    quant.quantity AS quantity,
+                    valuation.unit_cost AS unit_value,
+                    (quant.quantity * valuation.unit_cost) AS total_valuation,
+                    valuation.account_move_id AS account_move_id
+                FROM
+                    stock_valuation_layer AS valuation
+                INNER JOIN
+                    stock_quant AS quant
+                ON
+                    valuation.product_id = quant.product_id
+                WHERE
+                    quant.quantity > 0
+                    AND valuation.create_date <= CURRENT_DATE
+            )
+        """)
+
+    def init(self):
+        self._create_view()
+
+
+
+class InventoryValuationWizard(models.TransientModel):
+    _name = 'inventory.valuation.wizard'
+    _description = 'Wizard para Generar Reporte de Valorización de Inventario'
+
+    report_date = fields.Date(string='Fecha del Reporte', required=True, default=fields.Date.context_today)
+
+    def generate_report(self):
+        """
+        Genera el reporte basado en la fecha seleccionada.
+        """
+        # Limpiar registros antiguos
+        self.env['inventory.valuation.report'].clear()
+
+        # Crear una consulta con filtro por fecha
+        self.env.cr.execute("""
+            INSERT INTO inventory_valuation_report (valuation_date, product_id, location_id, quantity, unit_value, total_valuation, account_move_id)
+            SELECT
+                valuation.create_date AS valuation_date,
+                quant.product_id AS product_id,
+                quant.location_id AS location_id,
+                quant.quantity AS quantity,
+                valuation.unit_cost AS unit_value,
+                (quant.quantity * valuation.unit_cost) AS total_valuation,
+                valuation.account_move_id AS account_move_id
+            FROM
+                stock_valuation_layer AS valuation
+            INNER JOIN
+                stock_quant AS quant
+            ON
+                valuation.product_id = quant.product_id
+            WHERE
+                quant.quantity > 0
+                AND valuation.create_date <= %s
+        """, (self.report_date,))
+
+        # Devolver la acción para mostrar los resultados
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Reporte de Valorización de Inventario'),
+            'res_model': 'inventory.valuation.report',
+            'view_mode': 'tree,form',
+            'context': {'default_report_date': self.report_date},
+        }
