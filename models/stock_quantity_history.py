@@ -488,6 +488,7 @@ class InventoryValuationReport(models.Model):
     def generate_data(self, report_date):
         """
         Generar los datos del reporte a partir de la fecha especificada.
+        Optimizada para mejorar el rendimiento.
         """
         self.env.cr.execute("""
             INSERT INTO inventory_valuation_report (
@@ -514,7 +515,7 @@ class InventoryValuationReport(models.Model):
                 (quant.quantity * valuation.unit_cost) AS total_valuation,
                 valuation.account_move_id AS layer_account_move_id,
                 move.date AS stock_move_date,
-                move.name AS move_reference  -- Obtener el nombre desde stock.move
+                move.name AS move_reference
             FROM
                 stock_valuation_layer AS valuation
             INNER JOIN
@@ -524,10 +525,11 @@ class InventoryValuationReport(models.Model):
             LEFT JOIN
                 stock_move AS move
             ON
-                valuation.stock_move_id = move.id  -- Relación entre valuation y move
+                valuation.stock_move_id = move.id
             WHERE
                 valuation.create_date <= %s
                 AND quant.quantity > 0
+                AND quant.location_id IS NOT NULL  -- Asegurar que la ubicación no sea nula
         """, (report_date,))
 
 
