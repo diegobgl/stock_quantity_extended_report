@@ -497,82 +497,96 @@ class InventoryValuationReport(models.Model):
             record.total_valuation = record.quantity * record.unit_value
 
 
+    @api.model
     def generate_data(self, report_date):
         """
-        Generar los datos del reporte a partir de la fecha especificada.
-        Incluye lotes, ubicaciones y cálculos valorizados.
+        Genera los datos del reporte utilizando el ORM.
         """
         # Borrar datos previos
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Insertar nuevos datos
-        self.env.cr.execute("""
-            INSERT INTO inventory_valuation_report (
-                valuation_date,
-                product_id,
-                location_id,
-                lot_id,
-                quantity,
-                reserved_quantity,
-                unit_value,
-                total_valuation,
-                layer_account_move_id,
-                stock_move_date,
-                move_reference
-            )
-            SELECT
-                valuation.create_date AS valuation_date,
-                quant.product_id AS product_id,
-                quant.location_id AS location_id,
-                quant.lot_id AS lot_id,
-                quant.quantity AS quantity,
-                quant.reserved_quantity AS reserved_quantity,
-                COALESCE(valuation.unit_cost, 0) AS unit_value, -- Usa costo unitario o 0
-                COALESCE(quant.quantity, 0) * COALESCE(valuation.unit_cost, 0) AS total_valuation, -- Cálculo del valor total
-                valuation.account_move_id AS layer_account_move_id,
-                move.date AS stock_move_date,
-                move.reference AS move_reference
-            FROM
-                stock_valuation_layer AS valuation
-            LEFT JOIN
-                stock_move AS move
-            ON
-                valuation.stock_move_id = move.id
-            LEFT JOIN
-                stock_quant AS quant
-            ON
-                valuation.product_id = quant.product_id
-                AND quant.quantity > 0
-                AND quant.in_date <= %s
-            WHERE
-                valuation.create_date <= %s
-        """, (report_date, report_date))
+        products = self.env['product.product'].search([('type', '=', 'product')])
+
+        records_to_create = []
+        for product in products:
+            # Consultar stock.valuation.layer para el producto
+            valuation_layers = self.env['stock.valuation.layer'].search([
+                ('product_id', '=', product.id),
+                ('create_date', '<=', report_date)
+            ])
+            # Consultar stock.quant para el producto
+            quants = self.env['stock.quant'].search([
+                ('product_id', '=', product.id),
+                ('quantity', '>', 0),
+                ('in_date', '<=', report_date)
+            ])
+
+            for quant in quants:
+                # Obtener datos del lote, ubicación y cantidades
+                lot_id = quant.lot_id.id if quant.lot_id else False
+                location_id = quant.location_id.id
+                quantity = quant.quantity
+                reserved_quantity = quant.reserved_quantity
+
+                # Calcular valorización y unit value
+                unit_value = product.standard_price
+                total_valuation = quantity * unit_value
+
+                # Asociar movimiento contable si aplica
+                layer = valuation_layers.filtered(lambda v: v.location_id == quant.location_id)
+                layer_account_move_id = layer.account_move_id.id if layer else False
+
+                # Obtener datos del movimiento de stock
+                stock_move = self.env['stock.move'].search([
+                    ('product_id', '=', product.id),
+                    ('state', '=', 'done'),
+                    ('date', '<=', report_date)
+                ], limit=1, order='date desc')
+
+                move_reference = stock_move.reference if stock_move else False
+                stock_move_date = stock_move.date if stock_move else False
+
+                # Crear el registro
+                records_to_create.append({
+                    'valuation_date': report_date,
+                    'product_id': product.id,
+                    'location_id': location_id,
+                    'lot_id': lot_id,
+                    'quantity': quantity,
+                    'reserved_quantity': reserved_quantity,
+                    'unit_value': unit_value,
+                    'total_valuation': total_valuation,
+                    'layer_account_move_id': layer_account_move_id,
+                    'stock_move_date': stock_move_date,
+                    'move_reference': move_reference,
+                })
+
+        # Crear los registros en batch
+        self.create(records_to_create)
 
 
 
 
 class InventoryValuationWizard(models.TransientModel):
     _name = 'inventory.valuation.wizard'
-    _description = 'Wizard para Generar Reporte de Valorización de Inventario'
+    _description = 'Wizard para Generar Reporte de Valorización'
 
     report_date = fields.Date(string='Fecha del Reporte', required=True, default=fields.Date.context_today)
 
     def generate_report(self):
         """
-        Ejecuta la generación del reporte.
+        Llamar al método para generar datos del reporte.
         """
         if not self.report_date:
             raise UserError(_("Por favor, seleccione una fecha para generar el reporte."))
 
-        # Generar datos en la tabla
         self.env['inventory.valuation.report'].generate_data(self.report_date)
 
-        # Devolver la acción para mostrar el reporte
+        # Abrir la vista del reporte
         return {
             'type': 'ir.actions.act_window',
             'name': _('Reporte de Valorización de Inventario'),
             'res_model': 'inventory.valuation.report',
             'view_mode': 'tree,form',
-            'domain': [('valuation_date', '=', self.report_date)],
-            'context': {'default_report_date': self.report_date},
+            'context': {'default_valuation_date': self.report_date},
         }
