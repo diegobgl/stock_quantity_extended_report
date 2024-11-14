@@ -533,8 +533,8 @@ class InventoryValuationReport(models.Model):
                 total_valuation = quantity * unit_value
 
                 # Asociar movimiento contable si aplica
-                layer = valuation_layers.filtered(lambda v: v.location_id == quant.location_id)
-                layer_account_move_id = layer.account_move_id.id if layer else False
+                relevant_layers = valuation_layers.filtered(lambda v: v.location_id == quant.location_id)
+                layer_account_move_id = relevant_layers[0].account_move_id.id if relevant_layers else False  # Selecciona el primer registro
 
                 # Obtener datos del movimiento de stock
                 stock_move = self.env['stock.move'].search([
