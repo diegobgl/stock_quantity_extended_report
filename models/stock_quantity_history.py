@@ -472,48 +472,65 @@ class InventoryValuationReport(models.Model):
     _description = 'Reporte de Valorización de Inventario con Ubicaciones'
 
     valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
-    product_id = fields.Many2one('product.product', string='Producto')
-    location_id = fields.Many2one('stock.location', string='Ubicación')
-    lot_id = fields.Many2one('stock.lot', string='Lote')
-    quantity = fields.Float(string='Cantidad Disponible')
-    reserved_quantity = fields.Float(string='Cantidad Reservada')
-    unit_value = fields.Float(string='Precio Promedio Unitario')
-    total_valuation = fields.Float(string='Valor Total Valorizado')
-    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)')
-    quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)')
-    stock_move_date = fields.Datetime(string='Fecha del Movimiento')
-    move_reference = fields.Char(string='Referencia del Movimiento')
+    product_id = fields.Many2one('product.product', string='Producto', readonly=True)
+    location_id = fields.Many2one('stock.location', string='Ubicación', readonly=True)
+    lot_id = fields.Many2one('stock.lot', string='Lote', readonly=True)
+    quantity = fields.Float(string='Cantidad Disponible', readonly=True)
+    reserved_quantity = fields.Float(string='Cantidad Reservada', readonly=True)
+    unit_value = fields.Float(string='Precio Promedio Unitario', readonly=True)
+    total_valuation = fields.Float(string='Valor Total Valorizado', readonly=True)
+    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)', readonly=True)
+    quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)', readonly=True)
+    stock_move_date = fields.Datetime(string='Fecha del Movimiento', readonly=True)
+    move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
 
     @api.model
-    def _create_view(self):
+    def generate_data(self, report_date):
         """
-        Crea la vista SQL que fusiona stock.valuation.layer y stock.quant.
+        Genera datos y los inserta en la tabla.
+        :param report_date: Fecha límite para el cálculo.
         """
-        self.env.cr.execute("""
-            CREATE OR REPLACE VIEW inventory_valuation_report AS (
-                SELECT
-                    ROW_NUMBER() OVER() AS id,
-                    valuation.create_date AS valuation_date,
-                    quant.product_id AS product_id,
-                    quant.location_id AS location_id,
-                    quant.quantity AS quantity,
-                    valuation.unit_cost AS unit_value,
-                    (quant.quantity * valuation.unit_cost) AS total_valuation,
-                    valuation.account_move_id AS account_move_id
-                FROM
-                    stock_valuation_layer AS valuation
-                INNER JOIN
-                    stock_quant AS quant
-                ON
-                    valuation.product_id = quant.product_id
-                WHERE
-                    quant.quantity > 0
-                    AND valuation.create_date <= CURRENT_DATE
-            )
-        """)
+        # Eliminar registros anteriores
+        self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-    def init(self):
-        self._create_view()
+        # Insertar nuevos datos
+        self.env.cr.execute("""
+            INSERT INTO inventory_valuation_report (
+                valuation_date,
+                product_id,
+                location_id,
+                lot_id,
+                quantity,
+                reserved_quantity,
+                unit_value,
+                total_valuation,
+                layer_account_move_id,
+                quant_account_move_id,
+                stock_move_date,
+                move_reference
+            )
+            SELECT
+                valuation.create_date AS valuation_date,
+                quant.product_id AS product_id,
+                quant.location_id AS location_id,
+                quant.lot_id AS lot_id,
+                quant.quantity AS quantity,
+                quant.reserved_quantity AS reserved_quantity,
+                valuation.unit_cost AS unit_value,
+                (quant.quantity * valuation.unit_cost) AS total_valuation,
+                valuation.account_move_id AS layer_account_move_id,
+                NULL::integer AS quant_account_move_id, -- Ajustar según tu lógica
+                valuation.create_date AS stock_move_date,
+                valuation.name AS move_reference
+            FROM
+                stock_valuation_layer AS valuation
+            INNER JOIN
+                stock_quant AS quant
+            ON
+                valuation.product_id = quant.product_id
+            WHERE
+                valuation.create_date <= %s
+        """, (report_date,))
 
 
 
@@ -525,43 +542,20 @@ class InventoryValuationWizard(models.TransientModel):
 
     def generate_report(self):
         """
-        Genera el reporte basado en la fecha seleccionada.
+        Ejecuta la generación del reporte.
         """
-        # Eliminar registros antiguos de la tabla real
-        self.env['inventory.valuation.report'].search([]).unlink()
+        if not self.report_date:
+            raise UserError(_("Por favor, seleccione una fecha para generar el reporte."))
 
-        # Lógica para insertar nuevos datos en la tabla
-        report_data = []  # Aquí agregas los datos calculados
-        stock_quants = self.env['stock.quant'].search([])  # Obtén los datos de stock.quants
-        valuation_layers = self.env['stock.valuation.layer'].search([('create_date', '<=', self.report_date)])
+        # Generar datos en la tabla
+        self.env['inventory.valuation.report'].generate_data(self.report_date)
 
-        for layer in valuation_layers:
-            quant = stock_quants.filtered(lambda q: q.product_id == layer.product_id and q.location_id == layer.location_id)
-            report_data.append({
-                'valuation_date': self.report_date,
-                'product_id': layer.product_id.id,
-                'location_id': quant.location_id.id if quant else layer.location_id.id,
-                'lot_id': quant.lot_id.id if quant else False,
-                'quantity': quant.quantity if quant else 0.0,
-                'reserved_quantity': quant.reserved_quantity if quant else 0.0,
-                'unit_value': layer.unit_cost,
-                'total_valuation': layer.quantity * layer.unit_cost,
-                'layer_account_move_id': layer.account_move_id.id,
-                'quant_account_move_id': quant.account_move_id.id if quant else False,
-                'stock_move_date': layer.create_date,
-                'move_reference': layer.name,
-            })
-
-        # Crear registros en la tabla
-        self.env['inventory.valuation.report'].create(report_data)
-
-        # Configurar y devolver la acción para mostrar el reporte
-        action = {
+        # Devolver la acción para mostrar el reporte
+        return {
             'type': 'ir.actions.act_window',
             'name': _('Reporte de Valorización de Inventario'),
             'res_model': 'inventory.valuation.report',
             'view_mode': 'tree,form',
-            'domain': [('valuation_date', '<=', self.report_date)],
+            'domain': [('valuation_date', '=', self.report_date)],
             'context': {'default_report_date': self.report_date},
         }
-        return action
