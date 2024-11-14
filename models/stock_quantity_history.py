@@ -523,14 +523,9 @@ class InventoryValuationWizard(models.TransientModel):
         """
         Genera el reporte basado en la fecha seleccionada.
         """
-        # Eliminar registros antiguos en lotes para evitar MemoryError
-        model = self.env['inventory.valuation.report']
-        batch_size = 1000  # Elimina 1000 registros por lote
-        while True:
-            records = model.search([], limit=batch_size)
-            if not records:
-                break
-            records.unlink()
+        # Eliminar registros antiguos directamente en SQL
+        self.env.cr.execute("DELETE FROM inventory_valuation_report")
+
         # Crear una consulta con filtro por fecha
         self.env.cr.execute("""
             INSERT INTO inventory_valuation_report (valuation_date, product_id, location_id, quantity, unit_value, total_valuation, account_move_id)
