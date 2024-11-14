@@ -499,9 +499,8 @@ class InventoryValuationReport(models.Model):
 
     def generate_data(self, report_date):
         """
-        Genera los datos del informe de valorización de inventario considerando únicamente
-        las ubicaciones de tipo 'internal' y 'transit', excluyendo las de 'production'.
-        Maneja grandes volúmenes de datos por lotes para evitar bloqueos.
+        Genera los datos del informe de valorización de inventario considerando
+        únicamente las ubicaciones 'internal' y 'transit', y asegurando las relaciones correctas.
         """
         # Limpiar la tabla temporal antes de insertar nuevos datos
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
@@ -510,7 +509,6 @@ class InventoryValuationReport(models.Model):
         batch_size = 1000
 
         while True:
-            # Consulta con manejo de ubicaciones específicas y eliminación de duplicados
             query = f"""
                 SELECT
                     quant.product_id AS product_id,
@@ -518,8 +516,8 @@ class InventoryValuationReport(models.Model):
                     quant.lot_id AS lot_id,
                     SUM(quant.quantity) AS quantity,
                     SUM(quant.reserved_quantity) AS reserved_quantity,
-                    COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value,
-                    SUM(COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * pt.standard_price)) AS total_valuation,
+                    COALESCE(valuation.unit_cost, tmpl.standard_price) AS unit_value, -- Relación corregida
+                    SUM(COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * tmpl.standard_price)) AS total_valuation,
                     MAX(valuation.account_move_id) AS layer_account_move_id,
                     MAX(quant.in_date) AS stock_move_date,
                     MAX(valuation.create_date) AS valuation_date
@@ -528,9 +526,9 @@ class InventoryValuationReport(models.Model):
                 LEFT JOIN
                     stock_valuation_layer AS valuation ON quant.product_id = valuation.product_id
                 LEFT JOIN
-                    product_product AS pp ON quant.product_id = pp.id
+                    product_product AS prod ON quant.product_id = prod.id
                 LEFT JOIN
-                    product_template AS pt ON pp.product_tmpl_id = pt.id
+                    product_template AS tmpl ON prod.product_tmpl_id = tmpl.id -- Relación correcta a product.template
                 LEFT JOIN
                     stock_location AS location ON quant.location_id = location.id
                 WHERE
@@ -538,7 +536,7 @@ class InventoryValuationReport(models.Model):
                     AND location.usage IN ('internal', 'transit') -- Solo ubicaciones 'internal' y 'transit'
                     AND (valuation.create_date IS NULL OR valuation.create_date <= %s)
                 GROUP BY
-                    quant.product_id, quant.location_id, quant.lot_id, valuation.unit_cost, pt.standard_price
+                    quant.product_id, quant.location_id, quant.lot_id, valuation.unit_cost, tmpl.standard_price
                 LIMIT %s OFFSET %s
             """
             params = [report_date, batch_size, offset]
@@ -566,6 +564,7 @@ class InventoryValuationReport(models.Model):
 
             # Incrementar el offset para el siguiente lote
             offset += batch_size
+
 
     # def generate_data(self, report_date):
     #     """
