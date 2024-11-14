@@ -469,20 +469,21 @@ class StockValuationLayer(models.Model):
 
 class InventoryValuationReport(models.Model):
     _name = 'inventory.valuation.report'
-    _description = 'Reporte de Valorización de Inventario con Ubicaciones y Lotes'
+    _description = 'Reporte de Valorización de Inventario con Ubicaciones'
 
     valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
-    product_id = fields.Many2one('product.product', string='Producto')
-    location_id = fields.Many2one('stock.location', string='Ubicación')
-    lot_id = fields.Many2one('stock.lot', string='Lote')
-    quantity = fields.Float(string='Cantidad Disponible')
-    reserved_quantity = fields.Float(string='Cantidad Reservada')
-    unit_value = fields.Float(string='Precio Promedio Unitario')
-    total_valuation = fields.Float(string='Valor Total Valorizado')
-    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)')
-    stock_move_date = fields.Datetime(string='Fecha del Movimiento')
-    move_reference = fields.Char(string='Referencia del Movimiento')
-
+    product_id = fields.Many2one('product.product', string='Producto', readonly=True)
+    location_id = fields.Many2one('stock.location', string='Ubicación', readonly=True)
+    lot_id = fields.Many2one('stock.lot', string='Lote', readonly=True)
+    quantity = fields.Float(string='Cantidad Disponible', readonly=True)
+    reserved_quantity = fields.Float(string='Cantidad Reservada', readonly=True)
+    unit_value = fields.Float(string='Precio Promedio Unitario', readonly=True)
+    total_valuation = fields.Float(string='Valor Total Valorizado', readonly=True)
+    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)', readonly=True)
+    quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)', readonly=True)
+    stock_move_date = fields.Datetime(string='Fecha del Movimiento', readonly=True)
+    move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
+    account_move_id = fields.Many2one('account.move', string='Asiento Contable General')  # Añadir este campo
 
     def generate_data(self, report_date):
         """
