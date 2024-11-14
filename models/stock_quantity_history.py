@@ -515,8 +515,8 @@ class InventoryValuationReport(models.Model):
                 quant.lot_id AS lot_id,
                 quant.quantity AS quantity,
                 quant.reserved_quantity AS reserved_quantity,
-                COALESCE(valuation.unit_cost, quant.product_id.standard_price) AS unit_value, -- Usa costo unitario o precio estándar
-                COALESCE(quant.quantity, 0) * COALESCE(valuation.unit_cost, quant.product_id.standard_price) AS total_valuation, -- Cálculo del valor total
+                COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value, -- Usa costo unitario o precio estándar
+                COALESCE(quant.quantity, 0) * COALESCE(valuation.unit_cost, pt.standard_price) AS total_valuation, -- Cálculo del valor total
                 valuation.account_move_id AS layer_account_move_id,
                 move.date AS stock_move_date,
                 move.reference AS move_reference
@@ -532,9 +532,18 @@ class InventoryValuationReport(models.Model):
                 valuation.product_id = quant.product_id
                 AND quant.quantity > 0
                 AND quant.in_date <= %s
+            LEFT JOIN
+                product_product AS pp
+            ON
+                quant.product_id = pp.id
+            LEFT JOIN
+                product_template AS pt
+            ON
+                pp.product_tmpl_id = pt.id
             WHERE
                 valuation.create_date <= %s
         """, (report_date, report_date))
+
 
 
 
