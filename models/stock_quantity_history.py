@@ -485,16 +485,10 @@ class InventoryValuationReport(models.Model):
     move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
     account_move_id = fields.Many2one('account.move', string='Asiento Contable General')  # Añadir este campo
 
-    @api.model
     def generate_data(self, report_date):
         """
-        Genera datos y los inserta en la tabla.
-        :param report_date: Fecha límite para el cálculo.
+        Generar los datos del reporte a partir de la fecha especificada.
         """
-        # Eliminar registros anteriores
-        self.env.cr.execute("DELETE FROM inventory_valuation_report")
-
-        # Insertar nuevos datos
         self.env.cr.execute("""
             INSERT INTO inventory_valuation_report (
                 valuation_date,
@@ -506,13 +500,12 @@ class InventoryValuationReport(models.Model):
                 unit_value,
                 total_valuation,
                 layer_account_move_id,
-                quant_account_move_id,
                 stock_move_date,
                 move_reference
             )
             SELECT
                 valuation.create_date AS valuation_date,
-                quant.product_id AS product_id,
+                valuation.product_id AS product_id,
                 quant.location_id AS location_id,
                 quant.lot_id AS lot_id,
                 quant.quantity AS quantity,
@@ -520,17 +513,21 @@ class InventoryValuationReport(models.Model):
                 valuation.unit_cost AS unit_value,
                 (quant.quantity * valuation.unit_cost) AS total_valuation,
                 valuation.account_move_id AS layer_account_move_id,
-                NULL::integer AS quant_account_move_id, -- Ajustar según tu lógica
-                valuation.create_date AS stock_move_date,
-                valuation.name AS move_reference
+                move.date AS stock_move_date,
+                move.name AS move_reference  -- Obtener el nombre desde stock.move
             FROM
                 stock_valuation_layer AS valuation
             INNER JOIN
                 stock_quant AS quant
             ON
                 valuation.product_id = quant.product_id
+            LEFT JOIN
+                stock_move AS move
+            ON
+                valuation.stock_move_id = move.id  -- Relación entre valuation y move
             WHERE
                 valuation.create_date <= %s
+                AND quant.quantity > 0
         """, (report_date,))
 
 
