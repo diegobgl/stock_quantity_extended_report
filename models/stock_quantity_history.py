@@ -496,82 +496,153 @@ class InventoryValuationReport(models.Model):
         for record in self:
             record.total_valuation = record.quantity * record.unit_value
 
+
     def generate_data(self, report_date):
         """
-        Genera datos del informe utilizando SQL para optimizar el rendimiento.
+        Genera los datos del informe de valorización de inventario considerando únicamente
+        las ubicaciones de tipo 'internal' y 'transit', excluyendo las de 'production'.
+        Maneja grandes volúmenes de datos por lotes para evitar bloqueos.
         """
-        # Limpiar datos anteriores
+        # Limpiar la tabla temporal antes de insertar nuevos datos
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Consulta SQL para obtener datos de quants y valuation layers
-        query = """
-            INSERT INTO inventory_valuation_report (
-                valuation_date,
-                product_id,
-                location_id,
-                lot_id,
-                quantity,
-                reserved_quantity,
-                unit_value,
-                total_valuation,
-                layer_account_move_id,
-                stock_move_date,
-                move_reference,
-                create_uid,
-                create_date,
-                write_uid,
-                write_date
-            )
-            SELECT
-                %s AS valuation_date,
-                quant.product_id AS product_id,
-                quant.location_id AS location_id,
-                quant.lot_id AS lot_id,
-                quant.quantity AS quantity,
-                quant.reserved_quantity AS reserved_quantity,
-                COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value,
-                COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * pt.standard_price) AS total_valuation,
-                valuation.account_move_id AS layer_account_move_id,
-                move.date AS stock_move_date,
-                move.reference AS move_reference,
-                %s AS create_uid,
-                NOW() AS create_date,
-                %s AS write_uid,
-                NOW() AS write_date
-            FROM
-                stock_quant AS quant
-            LEFT JOIN
-                stock_valuation_layer AS valuation
-            ON
-                quant.product_id = valuation.product_id
-                AND quant.location_id = valuation.location_id
-                AND valuation.create_date <= %s
-            LEFT JOIN
-                stock_move AS move
-            ON
-                move.product_id = quant.product_id
-                AND move.state = 'done'
-                AND move.date <= %s
-            LEFT JOIN
-                product_product AS pp
-            ON
-                quant.product_id = pp.id
-            LEFT JOIN
-                product_template AS pt
-            ON
-                pp.product_tmpl_id = pt.id
-            WHERE
-                quant.quantity > 0
-        """
-        # Ejecutar la consulta con parámetros
-        params = [
-            report_date,
-            self.env.uid,  # create_uid
-            self.env.uid,  # write_uid
-            report_date,   # valuation_date para valuation layers
-            report_date    # stock_move.date
-        ]
-        self.env.cr.execute(query, params)
+        offset = 0
+        batch_size = 1000
+
+        while True:
+            # Consulta con manejo de ubicaciones específicas y eliminación de duplicados
+            query = f"""
+                SELECT
+                    quant.product_id AS product_id,
+                    quant.location_id AS location_id,
+                    quant.lot_id AS lot_id,
+                    SUM(quant.quantity) AS quantity,
+                    SUM(quant.reserved_quantity) AS reserved_quantity,
+                    COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value,
+                    SUM(COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * pt.standard_price)) AS total_valuation,
+                    MAX(valuation.account_move_id) AS layer_account_move_id,
+                    MAX(quant.in_date) AS stock_move_date,
+                    MAX(valuation.create_date) AS valuation_date
+                FROM
+                    stock_quant AS quant
+                LEFT JOIN
+                    stock_valuation_layer AS valuation ON quant.product_id = valuation.product_id
+                LEFT JOIN
+                    product_product AS pp ON quant.product_id = pp.id
+                LEFT JOIN
+                    product_template AS pt ON pp.product_tmpl_id = pt.id
+                LEFT JOIN
+                    stock_location AS location ON quant.location_id = location.id
+                WHERE
+                    quant.quantity > 0
+                    AND location.usage IN ('internal', 'transit') -- Solo ubicaciones 'internal' y 'transit'
+                    AND (valuation.create_date IS NULL OR valuation.create_date <= %s)
+                GROUP BY
+                    quant.product_id, quant.location_id, quant.lot_id, valuation.unit_cost, pt.standard_price
+                LIMIT %s OFFSET %s
+            """
+            params = [report_date, batch_size, offset]
+            self.env.cr.execute(query, params)
+
+            # Obtener los resultados de la consulta
+            results = self.env.cr.dictfetchall()
+            if not results:
+                break
+
+            # Insertar los datos en la tabla `inventory.valuation.report`
+            for row in results:
+                self.env['inventory.valuation.report'].create({
+                    'valuation_date': row['valuation_date'] or report_date,
+                    'product_id': row['product_id'],
+                    'location_id': row['location_id'],
+                    'lot_id': row['lot_id'],
+                    'quantity': row['quantity'],
+                    'reserved_quantity': row['reserved_quantity'],
+                    'unit_value': row['unit_value'],
+                    'total_valuation': row['total_valuation'],
+                    'layer_account_move_id': row['layer_account_move_id'],
+                    'stock_move_date': row['stock_move_date'],
+                })
+
+            # Incrementar el offset para el siguiente lote
+            offset += batch_size
+
+    # def generate_data(self, report_date):
+    #     """
+    #     Genera datos del informe utilizando SQL para optimizar el rendimiento.
+    #     """
+    #     # Limpiar datos anteriores
+    #     self.env.cr.execute("DELETE FROM inventory_valuation_report")
+
+    #     # Consulta SQL para obtener datos de quants y valuation layers
+    #     query = """
+    #         INSERT INTO inventory_valuation_report (
+    #             valuation_date,
+    #             product_id,
+    #             location_id,
+    #             lot_id,
+    #             quantity,
+    #             reserved_quantity,
+    #             unit_value,
+    #             total_valuation,
+    #             layer_account_move_id,
+    #             stock_move_date,
+    #             move_reference,
+    #             create_uid,
+    #             create_date,
+    #             write_uid,
+    #             write_date
+    #         )
+    #         SELECT
+    #             %s AS valuation_date,
+    #             quant.product_id AS product_id,
+    #             quant.location_id AS location_id,
+    #             quant.lot_id AS lot_id,
+    #             quant.quantity AS quantity,
+    #             quant.reserved_quantity AS reserved_quantity,
+    #             COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value,
+    #             COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * pt.standard_price) AS total_valuation,
+    #             valuation.account_move_id AS layer_account_move_id,
+    #             move.date AS stock_move_date,
+    #             move.reference AS move_reference,
+    #             %s AS create_uid,
+    #             NOW() AS create_date,
+    #             %s AS write_uid,
+    #             NOW() AS write_date
+    #         FROM
+    #             stock_quant AS quant
+    #         LEFT JOIN
+    #             stock_valuation_layer AS valuation
+    #         ON
+    #             quant.product_id = valuation.product_id
+    #             AND quant.location_id = valuation.location_id
+    #             AND valuation.create_date <= %s
+    #         LEFT JOIN
+    #             stock_move AS move
+    #         ON
+    #             move.product_id = quant.product_id
+    #             AND move.state = 'done'
+    #             AND move.date <= %s
+    #         LEFT JOIN
+    #             product_product AS pp
+    #         ON
+    #             quant.product_id = pp.id
+    #         LEFT JOIN
+    #             product_template AS pt
+    #         ON
+    #             pp.product_tmpl_id = pt.id
+    #         WHERE
+    #             quant.quantity > 0
+    #     """
+    #     # Ejecutar la consulta con parámetros
+    #     params = [
+    #         report_date,
+    #         self.env.uid,  # create_uid
+    #         self.env.uid,  # write_uid
+    #         report_date,   # valuation_date para valuation layers
+    #         report_date    # stock_move.date
+    #     ]
+    #     self.env.cr.execute(query, params)
 
     # @api.model
     # def generate_data(self, report_date):
@@ -639,8 +710,6 @@ class InventoryValuationReport(models.Model):
 
     #     # Crear los registros en batch
     #     self.create(records_to_create)
-
-
 
 
 class InventoryValuationWizard(models.TransientModel):
