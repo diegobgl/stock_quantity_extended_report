@@ -469,27 +469,30 @@ class StockValuationLayer(models.Model):
 
 class InventoryValuationReport(models.Model):
     _name = 'inventory.valuation.report'
-    _description = 'Reporte de Valorización de Inventario con Ubicaciones'
+    _description = 'Reporte de Valorización de Inventario con Ubicaciones y Lotes'
 
     valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
-    product_id = fields.Many2one('product.product', string='Producto', readonly=True)
-    location_id = fields.Many2one('stock.location', string='Ubicación', readonly=True)
-    lot_id = fields.Many2one('stock.lot', string='Lote', readonly=True)
-    quantity = fields.Float(string='Cantidad Disponible', readonly=True)
-    reserved_quantity = fields.Float(string='Cantidad Reservada', readonly=True)
-    unit_value = fields.Float(string='Precio Promedio Unitario', readonly=True)
-    total_valuation = fields.Float(string='Valor Total Valorizado', readonly=True)
-    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)', readonly=True)
-    quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)', readonly=True)
-    stock_move_date = fields.Datetime(string='Fecha del Movimiento', readonly=True)
-    move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
-    account_move_id = fields.Many2one('account.move', string='Asiento Contable General')  # Añadir este campo
+    product_id = fields.Many2one('product.product', string='Producto')
+    location_id = fields.Many2one('stock.location', string='Ubicación')
+    lot_id = fields.Many2one('stock.lot', string='Lote')
+    quantity = fields.Float(string='Cantidad Disponible')
+    reserved_quantity = fields.Float(string='Cantidad Reservada')
+    unit_value = fields.Float(string='Precio Promedio Unitario')
+    total_valuation = fields.Float(string='Valor Total Valorizado')
+    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)')
+    stock_move_date = fields.Datetime(string='Fecha del Movimiento')
+    move_reference = fields.Char(string='Referencia del Movimiento')
+
 
     def generate_data(self, report_date):
         """
         Generar los datos del reporte a partir de la fecha especificada.
-        Optimizada para mejorar el rendimiento.
+        Incluye lotes, ubicaciones y cálculos valorizados.
         """
+        # Borrar datos previos
+        self.env.cr.execute("DELETE FROM inventory_valuation_report")
+
+        # Insertar nuevos datos
         self.env.cr.execute("""
             INSERT INTO inventory_valuation_report (
                 valuation_date,
@@ -506,31 +509,31 @@ class InventoryValuationReport(models.Model):
             )
             SELECT
                 valuation.create_date AS valuation_date,
-                valuation.product_id AS product_id,
+                quant.product_id AS product_id,
                 quant.location_id AS location_id,
                 quant.lot_id AS lot_id,
                 quant.quantity AS quantity,
                 quant.reserved_quantity AS reserved_quantity,
-                valuation.unit_cost AS unit_value,
-                (quant.quantity * valuation.unit_cost) AS total_valuation,
+                COALESCE(valuation.unit_cost, quant.product_id.standard_price) AS unit_value, -- Usa costo unitario o precio estándar
+                COALESCE(quant.quantity, 0) * COALESCE(valuation.unit_cost, quant.product_id.standard_price) AS total_valuation, -- Cálculo del valor total
                 valuation.account_move_id AS layer_account_move_id,
                 move.date AS stock_move_date,
-                move.name AS move_reference
+                move.reference AS move_reference
             FROM
                 stock_valuation_layer AS valuation
-            INNER JOIN
-                stock_quant AS quant
-            ON
-                valuation.product_id = quant.product_id
             LEFT JOIN
                 stock_move AS move
             ON
                 valuation.stock_move_id = move.id
+            LEFT JOIN
+                stock_quant AS quant
+            ON
+                valuation.product_id = quant.product_id
+                AND quant.quantity > 0
+                AND quant.in_date <= %s
             WHERE
                 valuation.create_date <= %s
-                AND quant.quantity > 0
-                AND quant.location_id IS NOT NULL  -- Asegurar que la ubicación no sea nula
-        """, (report_date,))
+        """, (report_date, report_date))
 
 
 
