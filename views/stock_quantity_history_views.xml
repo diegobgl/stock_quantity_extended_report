@@ -140,28 +140,30 @@
             <field name="name">inventory.valuation.report.search</field>
             <field name="model">inventory.valuation.report</field>
             <field name="arch" type="xml">
-                <search string="Buscar en Reporte de Valorización">
-                    <field name="valuation_date" />
-                    <field name="product_id" />
-                    <field name="location_id" />
-                    <field name="lot_id" />
-                    <field name="valuation_account_id" />
-                    <field name="move_reference" />
+                <search string="Buscar Reporte de Valorización">
+                    <!-- Campos para búsqueda -->
+                    <field name="valuation_date"/>
+                    <field name="product_id"/>
+                    <field name="location_id"/>
+                    <field name="lot_id"/>
+                    <field name="move_reference"/>
+                    <field name="account_move_id"/>
 
-                    <!-- Filtros Rápidos -->
-                    <filter string="Con Cantidad" domain="[('quantity', '>', 0)]" />
-                    <filter string="Con Asiento Contable" domain="[('account_move_id', '!=', False)]" />
-                    <filter string="Con Reservas" domain="[('reserved_quantity', '>', 0)]" />
+                    <!-- Filtros rápidos -->
+                    <filter string="Con Cantidad Disponible" domain="[('quantity', '>', 0)]"/>
+                    <filter string="Con Asiento Contable" domain="[('account_move_id', '!=', False)]"/>
+                    <filter string="Con Reservas" domain="[('reserved_quantity', '>', 0)]"/>
 
-                    <!-- Filtros de Grupo -->
-                    <group expand="1" string="Agrupado por">
-                        <filter string="Producto" context="{'group_by': 'product_id'}" />
-                        <filter string="Ubicación" context="{'group_by': 'location_id'}" />
-                        <filter string="Fecha de Valorización" context="{'group_by': 'valuation_date'}" />
+                    <!-- Agrupaciones -->
+                    <group expand="1" string="Agrupar por">
+                        <filter string="Producto" context="{'group_by': 'product_id'}"/>
+                        <filter string="Ubicación" context="{'group_by': 'location_id'}"/>
+                        <filter string="Fecha" context="{'group_by': 'valuation_date'}"/>
                     </group>
                 </search>
             </field>
         </record>
+
 
 
 
