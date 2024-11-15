@@ -502,77 +502,85 @@ class InventoryValuationReport(models.Model):
 
 
     def generate_data(self, report_date):
-            """
-            Genera datos del informe utilizando SQL para optimizar el rendimiento.
-            """
-            # Limpiar datos anteriores
-            self.env.cr.execute("DELETE FROM inventory_valuation_report")
+        """
+        Genera datos del informe procesando registros en lotes para optimizar el rendimiento.
+        """
+        # Limpiar datos anteriores
+        self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-            # Consulta SQL para obtener datos de quants y valuation layers
-            query = """
-                INSERT INTO inventory_valuation_report (
-                    valuation_date,
-                    product_id,
-                    location_id,
-                    lot_id,
-                    quantity,
-                    reserved_quantity,
-                    layer_account_move_id,
-                    stock_move_date,
-                    move_reference,
-                    create_uid,
-                    create_date,
-                    write_uid,
-                    write_date
-                )
-                SELECT
-                    %s AS valuation_date,
-                    quant.product_id AS product_id,
-                    quant.location_id AS location_id,
-                    quant.lot_id AS lot_id,
-                    quant.quantity AS quantity,
-                    quant.reserved_quantity AS reserved_quantity,
-                    valuation.account_move_id AS layer_account_move_id,
-                    move.date AS stock_move_date,
-                    move.reference AS move_reference,
-                    %s AS create_uid,
-                    NOW() AS create_date,
-                    %s AS write_uid,
-                    NOW() AS write_date
-                FROM
-                    stock_quant AS quant
-                LEFT JOIN
-                    stock_valuation_layer AS valuation
-                ON
-                    quant.product_id = valuation.product_id
-                    AND quant.location_id = valuation.location_id
-                    AND valuation.create_date <= %s
-                LEFT JOIN
-                    stock_move AS move
-                ON
-                    move.product_id = quant.product_id
-                    AND move.state = 'done'
-                    AND move.date <= %s
-                LEFT JOIN
-                    product_product AS pp
-                ON
-                    quant.product_id = pp.id
-                LEFT JOIN
-                    product_template AS pt
-                ON
-                    pp.product_tmpl_id = pt.id
-                WHERE
-                    quant.quantity > 0
+        # Parámetros de configuración de lotes
+        query_batch_size = 1000  # Cantidad de registros a consultar por lote
+        insert_batch_size = 500  # Cantidad de registros a insertar por lote
+        offset = 0  # Control de desplazamiento para la consulta por lotes
+
+        # Consulta SQL base
+        base_query = """
+            SELECT
+                quant.product_id AS product_id,
+                quant.location_id AS location_id,
+                quant.lot_id AS lot_id,
+                quant.quantity AS quantity,
+                quant.reserved_quantity AS reserved_quantity,
+                valuation.account_move_id AS layer_account_move_id,
+                move.date AS stock_move_date,
+                move.reference AS move_reference
+            FROM
+                stock_quant AS quant
+            LEFT JOIN
+                stock_valuation_layer AS valuation
+            ON
+                quant.product_id = valuation.product_id
+                AND quant.location_id = valuation.location_id
+                AND valuation.create_date <= %s
+            LEFT JOIN
+                stock_move AS move
+            ON
+                move.product_id = quant.product_id
+                AND move.state = 'done'
+                AND move.date <= %s
+            WHERE
+                quant.quantity > 0
+        """
+
+        while True:
+            # Añadir límite y desplazamiento a la consulta base
+            paginated_query = f"""
+                {base_query}
+                LIMIT {query_batch_size} OFFSET {offset}
             """
-            # Ejecutar la consulta con parámetros
-            params = [
-                report_date,
-                self.env.uid,  # create_uid
-                self.env.uid,  # write_uid
-                report_date,   # valuation_date para valuation layers
-                report_date    # stock_move.date
-            ]
-            self.env.cr.execute(query, params)
+            self.env.cr.execute(paginated_query, [report_date, report_date])
+            records = self.env.cr.dictfetchall()
+
+            if not records:
+                # Si no hay más registros, salir del bucle
+                break
+
+            # Preparar los datos para la inserción
+            insert_values = []
+            for record in records:
+                insert_values.append({
+                    'valuation_date': report_date,
+                    'product_id': record['product_id'],
+                    'location_id': record['location_id'],
+                    'lot_id': record['lot_id'],
+                    'quantity': record['quantity'],
+                    'reserved_quantity': record['reserved_quantity'],
+                    'layer_account_move_id': record['layer_account_move_id'],
+                    'stock_move_date': record['stock_move_date'],
+                    'move_reference': record['move_reference'],
+                    'create_uid': self.env.uid,
+                    'create_date': fields.Datetime.now(),
+                    'write_uid': self.env.uid,
+                    'write_date': fields.Datetime.now(),
+                })
+
+            # Insertar los datos en lotes más pequeños
+            for i in range(0, len(insert_values), insert_batch_size):
+                batch = insert_values[i:i + insert_batch_size]
+                self.env['inventory.valuation.report'].create(batch)
+
+            # Incrementar el offset para el siguiente lote
+            offset += query_batch_size
 
 
 
