@@ -496,6 +496,21 @@ class InventoryValuationReport(models.Model):
             record.total_valuation = record.quantity * record.unit_value
 
 
+class InventoryValuationReport(models.Model):
+    _name = 'inventory.valuation.report'
+    _description = 'Reporte de Valorización de Inventario con Ubicaciones'
+
+    valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
+    product_id = fields.Many2one('product.product', string='Producto')
+    location_id = fields.Many2one('stock.location', string='Ubicación')
+    lot_id = fields.Many2one('stock.lot', string='Lote')
+    quantity = fields.Float(string='Cantidad Disponible')
+    reserved_quantity = fields.Float(string='Cantidad Reservada')
+    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)')
+    stock_move_date = fields.Datetime(string='Fecha del Movimiento')
+    move_reference = fields.Char(string='Referencia del Movimiento')
+
+    @api.model
     def generate_data(self, report_date):
         """
         Genera datos del informe procesando registros en lotes para optimizar el rendimiento.
@@ -503,7 +518,45 @@ class InventoryValuationReport(models.Model):
         # Limpiar datos anteriores
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Consulta base para obtener datos por lotes
+        # Definir los parámetros comunes para la consulta
+        offset = 0
+        batch_size = 1000
+
+        while True:
+            records = self._fetch_data(report_date, batch_size, offset)
+
+            if not records:
+                break  # Salir si no hay más registros
+
+            # Preparar datos para la inserción
+            insert_values = []
+            for record in records:
+                insert_values.append({
+                    'valuation_date': report_date,
+                    'product_id': record['product_id'],
+                    'location_id': record['location_id'],
+                    'lot_id': record['lot_id'],
+                    'quantity': record['quantity'],
+                    'reserved_quantity': record['reserved_quantity'],
+                    'layer_account_move_id': record['layer_account_move_id'],
+                    'stock_move_date': record['stock_move_date'],
+                    'move_reference': record['move_reference'],
+                    'create_uid': self.env.uid,
+                    'create_date': fields.Datetime.now(),
+                    'write_uid': self.env.uid,
+                    'write_date': fields.Datetime.now(),
+                })
+
+            # Insertar datos en lotes más pequeños
+            self._insert_in_batches(insert_values)
+
+            # Incrementar el offset para el siguiente lote
+            offset += batch_size
+
+    def _fetch_data(self, report_date, batch_size, offset):
+        """
+        Realiza la consulta SQL por lotes.
+        """
         base_query = """
             SELECT
                 quant.product_id AS product_id,
@@ -535,42 +588,9 @@ class InventoryValuationReport(models.Model):
                 )
             LIMIT %s OFFSET %s
         """
-
-        offset = 0
-        batch_size = 1000
-
-    while True:
-        # Ejecutar la consulta por lotes
+        # Ejecutar la consulta
         self.env.cr.execute(base_query, (report_date, report_date, batch_size, offset))
-        records = self.env.cr.dictfetchall()
-
-        if not records:
-            break  # Salir si no hay más registros
-
-        # Preparar datos para la inserción
-        insert_values = []
-        for record in records:
-            insert_values.append({
-                'valuation_date': report_date,
-                'product_id': record['product_id'],
-                'location_id': record['location_id'],
-                'lot_id': record['lot_id'],
-                'quantity': record['quantity'],
-                'reserved_quantity': record['reserved_quantity'],
-                'layer_account_move_id': record['layer_account_move_id'],
-                'stock_move_date': record['stock_move_date'],
-                'move_reference': record['move_reference'],
-                'create_uid': self.env.uid,
-                'create_date': fields.Datetime.now(),
-                'write_uid': self.env.uid,
-                'write_date': fields.Datetime.now(),
-            })
-
-        # Insertar datos en lotes más pequeños
-        self._insert_in_batches(insert_values)
-
-        # Incrementar el offset para el siguiente lote
-        offset += batch_size
+        return self.env.cr.dictfetchall()
 
     def _insert_in_batches(self, data):
         """
@@ -580,6 +600,7 @@ class InventoryValuationReport(models.Model):
         for i in range(0, len(data), batch_size):
             batch = data[i:i + batch_size]
             self.env['inventory.valuation.report'].create(batch)
+
 
 
 
