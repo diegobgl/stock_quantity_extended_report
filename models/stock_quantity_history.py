@@ -482,18 +482,34 @@ class InventoryValuationReport(models.Model):
     lot_id = fields.Many2one('stock.lot', string='Lote', readonly=True)
     quantity = fields.Float(string='Cantidad Disponible', readonly=True)
     reserved_quantity = fields.Float(string='Cantidad Reservada', readonly=True)
-    unit_value = fields.Float(string='Precio Promedio Unitario')
-    total_valuation = fields.Float(string='Valor Total Valorizado' )
+    unit_value = fields.Float(string='Precio Promedio Unitario', compute='_compute_unit_value', store=True, readonly=True)
+    total_valuation = fields.Float(string='Valor Total Valorizado', compute='_compute_total_valuation', store=True, readonly=True)
     layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)', readonly=True)
     quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)', readonly=True)
     stock_move_date = fields.Datetime(string='Fecha del Movimiento', readonly=True)
     move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
     account_move_id = fields.Many2one('account.move', string='Asiento Contable General')  # Añadir este campo
 
-    @api.depends('product_id')
+    @api.depends('product_id', 'layer_account_move_id')
     def _compute_unit_value(self):
+        """
+        Calcula el precio unitario promedio.
+        Si hay una capa de valoración (`layer_account_move_id`), toma el costo unitario de ahí.
+        En caso contrario, utiliza el precio estándar del producto.
+        """
         for record in self:
-            record.unit_value = record.product_id.standard_price
+            if record.layer_account_move_id:
+                record.unit_value = record.layer_account_move_id.unit_cost
+            else:
+                record.unit_value = record.product_id.standard_price
+
+    @api.depends('quantity', 'unit_value')
+    def _compute_total_valuation(self):
+        """
+        Calcula el valor total valorizado multiplicando la cantidad disponible por el precio unitario.
+        """
+        for record in self:
+            record.total_valuation = record.quantity * record.unit_value
             
     def generate_data(self, report_date):
         """
@@ -578,59 +594,67 @@ class InventoryValuationReport(models.Model):
 
     def generate_data_by_orm(self, report_date):
         """
-        Genera datos del informe utilizando ORM, filtrando ubicaciones de tipo interno y tránsito.
+        Genera datos del informe utilizando el ORM, optimizado en lotes.
+        Incluye información de cuentas contables, últimos movimientos y valores relacionados.
         """
-        # Limpiar datos anteriores
-        self.env['inventory.valuation.report'].search([]).unlink()
+        # Eliminar registros previos para evitar duplicados
+        self.search([]).unlink()
 
-        # Filtrar ubicaciones de tipo interno y tránsito
-        valid_locations = self.env['stock.location'].search([('usage', 'in', ['internal', 'transit'])])
-        valid_location_ids = valid_locations.ids
+        # Configuración para dividir la generación en lotes
+        batch_size = 500
+        products = self.env['product.product'].search([])  # Obtener todos los productos
+        total_products = len(products)
+        batches = range(0, total_products, batch_size)
 
-        # Obtener los registros de stock.quant con las condiciones necesarias
-        quants = self.env['stock.quant'].search([
-            ('quantity', '>', 0),
-            ('location_id', 'in', valid_location_ids)
-        ])
+        for offset in batches:
+            # Obtener un lote de productos
+            product_batch = products[offset:offset + batch_size]
+            
+            # Preparar registros para insertar
+            records_to_create = []
+            for product in product_batch:
+                quants = self.env['stock.quant'].search([
+                    ('product_id', '=', product.id),
+                    ('quantity', '>', 0),
+                    ('location_id.usage', 'in', ['internal', 'transit'])  # Filtrar ubicaciones
+                ])
+                for quant in quants:
+                    # Buscar información relacionada
+                    valuation_layer = self.env['stock.valuation.layer'].search([
+                        ('product_id', '=', quant.product_id.id),
+                        ('create_date', '<=', report_date)
+                    ], limit=1, order='create_date desc')
 
-        records = []
-        for quant in quants:
-            # Buscar movimientos relacionados
-            moves = self.env['stock.move'].search([
-                ('product_id', '=', quant.product_id.id),
-                ('state', '=', 'done'),
-                ('date', '<=', report_date)
-            ], limit=1, order='date desc')  # Último movimiento antes de la fecha
+                    last_move = self.env['stock.move'].search([
+                        ('product_id', '=', quant.product_id.id),
+                        ('state', '=', 'done'),
+                        ('date', '<=', report_date)
+                    ], limit=1, order='date desc')
 
-            # Buscar capa de valoración relacionada
-            valuation_layer = self.env['stock.valuation.layer'].search([
-                ('product_id', '=', quant.product_id.id),
-                ('create_date', '<=', report_date)
-            ], limit=1, order='create_date desc')
+                    # Crear un diccionario con los datos del registro
+                    records_to_create.append({
+                        'valuation_date': report_date,
+                        'product_id': quant.product_id.id,
+                        'location_id': quant.location_id.id,
+                        'lot_id': quant.lot_id.id if quant.lot_id else None,
+                        'quantity': quant.quantity,
+                        'reserved_quantity': quant.reserved_quantity,
+                        'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
+                        'stock_move_date': last_move.date if last_move else None,
+                        'move_reference': last_move.reference if last_move else None,
+                        'account_move_id': last_move.account_move_ids[:1].id if last_move else None,
+                        'create_uid': self.env.uid,
+                        'create_date': fields.Datetime.now(),
+                        'write_uid': self.env.uid,
+                        'write_date': fields.Datetime.now(),
+                    })
 
-            # Crear registros en inventory.valuation.report
-            records.append({
-                'valuation_date': report_date,
-                'product_id': quant.product_id.id,
-                'location_id': quant.location_id.id,
-                'lot_id': quant.lot_id.id,
-                'quantity': quant.quantity,
-                'reserved_quantity': quant.reserved_quantity,
-                'unit_value': valuation_layer.unit_cost if valuation_layer else quant.product_id.standard_price,
-                'total_valuation': quant.quantity * (valuation_layer.unit_cost if valuation_layer else quant.product_id.standard_price),
-                'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else False,
-                'stock_move_date': moves.date if moves else False,
-                'move_reference': moves.reference if moves else False,
-            })
+            # Insertar los registros en lotes
+            if records_to_create:
+                self.create(records_to_create)
 
-            # Insertar registros en lotes de 500
-            if len(records) >= 500:
-                self.env['inventory.valuation.report'].create(records)
-                records = []
-
-        # Insertar los registros restantes
-        if records:
-            self.env['inventory.valuation.report'].create(records)
+            # Progresar en el log para grandes volúmenes de datos
+            _logger.info("Processed batch %s/%s", offset + batch_size, total_products)
 
 
 
