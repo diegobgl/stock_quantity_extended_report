@@ -576,86 +576,61 @@ class InventoryValuationReport(models.Model):
             # Incrementar el offset para el siguiente lote
             offset += batch_size
 
-    def generate_data_by_orm(self, report_date):
+    def generate_data(self, report_date):
         """
-        Genera datos del informe utilizando el ORM de Odoo.
-        Filtra productos con stock disponible relacionado con stock.quant, stock.move, stock.valuation.layer y account.move.
+        Genera datos del informe utilizando ORM, filtrando ubicaciones de tipo interno y tránsito.
         """
-        InventoryValuationReport = self.env['inventory.valuation.report']
-        Product = self.env['product.product']
-
         # Limpiar datos anteriores
-        InventoryValuationReport.sudo().search([]).unlink()
+        self.env['inventory.valuation.report'].search([]).unlink()
 
-        # Filtrar productos con stock disponible
+        # Filtrar ubicaciones de tipo interno y tránsito
+        valid_locations = self.env['stock.location'].search([('usage', 'in', ['internal', 'transit'])])
+        valid_location_ids = valid_locations.ids
+
+        # Obtener los registros de stock.quant con las condiciones necesarias
         quants = self.env['stock.quant'].search([
             ('quantity', '>', 0),
-            ('location_id.usage', 'in', ['internal', 'transit'])  # Considerar solo ubicaciones internas y de tránsito
+            ('location_id', 'in', valid_location_ids)
         ])
 
-        product_ids = quants.mapped('product_id.id')
-        location_ids = quants.mapped('location_id.id')
-        lot_ids = quants.mapped('lot_id.id')
-
-        # Obtener movimientos de stock relacionados
-        moves = self.env['stock.move'].search([
-            ('product_id', 'in', product_ids),
-            ('state', '=', 'done'),
-            ('date', '<=', report_date)
-        ])
-
-        move_map = {move.product_id.id: move for move in moves}
-
-        # Obtener capas de valoración relacionadas
-        valuation_layers = self.env['stock.valuation.layer'].search([
-            ('product_id', 'in', product_ids),
-            ('create_date', '<=', report_date)
-        ])
-
-        valuation_map = {vl.product_id.id: vl for vl in valuation_layers}
-
-        # Obtener asientos contables relacionados
-        account_moves = self.env['account.move'].search([
-            ('id', 'in', valuation_layers.mapped('account_move_id.id')),
-            ('state', '=', 'posted')
-        ])
-
-        account_move_map = {am.id: am for am in account_moves}
-
-        # Generar datos del informe
         records = []
         for quant in quants:
-            product_id = quant.product_id.id
-            location_id = quant.location_id.id
-            lot_id = quant.lot_id.id
+            # Buscar movimientos relacionados
+            moves = self.env['stock.move'].search([
+                ('product_id', '=', quant.product_id.id),
+                ('state', '=', 'done'),
+                ('date', '<=', report_date)
+            ], limit=1, order='date desc')  # Último movimiento antes de la fecha
 
-            move = move_map.get(product_id)
-            valuation_layer = valuation_map.get(product_id)
-            account_move = account_move_map.get(valuation_layer.account_move_id.id) if valuation_layer else None
+            # Buscar capa de valoración relacionada
+            valuation_layer = self.env['stock.valuation.layer'].search([
+                ('product_id', '=', quant.product_id.id),
+                ('create_date', '<=', report_date)
+            ], limit=1, order='create_date desc')
 
-            if not (move and valuation_layer and account_move):
-                continue
-
+            # Crear registros en inventory.valuation.report
             records.append({
                 'valuation_date': report_date,
-                'product_id': product_id,
-                'location_id': location_id,
-                'lot_id': lot_id,
+                'product_id': quant.product_id.id,
+                'location_id': quant.location_id.id,
+                'lot_id': quant.lot_id.id,
                 'quantity': quant.quantity,
                 'reserved_quantity': quant.reserved_quantity,
+                'unit_value': valuation_layer.unit_cost if valuation_layer else quant.product_id.standard_price,
+                'total_valuation': quant.quantity * (valuation_layer.unit_cost if valuation_layer else quant.product_id.standard_price),
                 'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else False,
-                'stock_move_date': move.date if move else False,
-                'move_reference': move.reference if move else '',
-                'create_uid': self.env.uid,
-                'create_date': fields.Datetime.now(),
-                'write_uid': self.env.uid,
-                'write_date': fields.Datetime.now(),
+                'stock_move_date': moves.date if moves else False,
+                'move_reference': moves.reference if moves else False,
             })
 
-        # Insertar los registros en lotes de 500
-        batch_size = 500
-        for i in range(0, len(records), batch_size):
-            InventoryValuationReport.sudo().create(records[i:i + batch_size])
+            # Insertar registros en lotes de 500
+            if len(records) >= 500:
+                self.env['inventory.valuation.report'].create(records)
+                records = []
+
+        # Insertar los registros restantes
+        if records:
+            self.env['inventory.valuation.report'].create(records)
 
 
 
