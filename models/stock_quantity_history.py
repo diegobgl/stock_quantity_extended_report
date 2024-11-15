@@ -572,14 +572,14 @@ class InventoryValuationReport(models.Model):
         # Incrementar el offset para el siguiente lote
         offset += batch_size
 
-def _insert_in_batches(self, data):
-    """
-    Inserta registros en la tabla en lotes más pequeños.
-    """
-    batch_size = 500
-    for i in range(0, len(data), batch_size):
-        batch = data[i:i + batch_size]
-        self.env['inventory.valuation.report'].create(batch)
+    def _insert_in_batches(self, data):
+        """
+        Inserta registros en la tabla en lotes más pequeños.
+        """
+        batch_size = 500
+        for i in range(0, len(data), batch_size):
+            batch = data[i:i + batch_size]
+            self.env['inventory.valuation.report'].create(batch)
 
 
 
