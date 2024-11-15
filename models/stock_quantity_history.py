@@ -488,7 +488,20 @@ class InventoryValuationReport(models.Model):
     quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)', readonly=True)
     stock_move_date = fields.Datetime(string='Fecha del Movimiento', readonly=True)
     move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
-    account_move_id = fields.Many2one('account.move', string='Asiento Contable General')  # Añadir este campo
+    account_move_id = fields.Many2one('account.move', string='Asiento Contable General')
+    valuation_account_id = fields.Many2one(
+        'account.account',
+        string='Cuenta Contable de Valorización',
+        readonly=True,
+        compute='_compute_valuation_account',
+        store=True
+    )
+
+    @api.depends('product_id')
+    def _compute_valuation_account(self):
+        for record in self:
+            record.valuation_account_id = record.product_id.categ_id.property_stock_valuation_account_id
+
 
     @api.depends('layer_account_move_id', 'product_id')
     def _compute_unit_value(self):
