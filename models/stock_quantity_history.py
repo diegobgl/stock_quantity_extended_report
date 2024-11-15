@@ -497,55 +497,53 @@ class InventoryValuationReport(models.Model):
             record.total_valuation = record.quantity * record.unit_value
 
 
+    @api.model
     def generate_data(self, report_date):
         """
-        Genera los datos del informe de valorización de inventario considerando
-        únicamente las ubicaciones 'internal' y 'transit', y asegurando las relaciones correctas.
+        Genera los datos del informe con SQL optimizado.
         """
-        # Limpiar la tabla temporal antes de insertar nuevos datos
+        # Limpiar registros existentes
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        offset = 0
-        batch_size = 1000
+        # Consulta SQL optimizada
+        query = """
+            INSERT INTO inventory_valuation_report (
+                valuation_date, product_id, location_id, lot_id, quantity,
+                reserved_quantity, account_move_id, stock_move_date, move_reference, create_uid, create_date
+            )
+            SELECT
+                %s AS valuation_date,
+                quant.product_id AS product_id,
+                quant.location_id AS location_id,
+                quant.lot_id AS lot_id,
+                quant.quantity AS quantity,
+                quant.reserved_quantity AS reserved_quantity,
+                valuation.account_move_id AS account_move_id,
+                quant.in_date AS stock_move_date,
+                move.reference AS move_reference,
+                %s AS create_uid,
+                NOW() AS create_date
+            FROM
+                stock_quant AS quant
+            LEFT JOIN
+                stock_valuation_layer AS valuation ON valuation.product_id = quant.product_id
+            LEFT JOIN
+                stock_move AS move ON move.id = valuation.stock_move_id
+            WHERE
+                quant.quantity > 0
+                AND quant.location_id IN (
+                    SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')
+                )
+                AND (valuation.create_date <= %s OR valuation.create_date IS NULL)
+            GROUP BY
+                quant.product_id, quant.location_id, quant.lot_id, quant.quantity,
+                quant.reserved_quantity, valuation.account_move_id, quant.in_date, move.reference;
+        """
 
-        while True:
-            query = f"""
-                SELECT
-                    quant.product_id AS product_id,
-                    quant.location_id AS location_id,
-                    quant.lot_id AS lot_id,
-                    SUM(quant.quantity) AS quantity,
-                    SUM(quant.reserved_quantity) AS reserved_quantity,
-                    COALESCE(valuation.unit_cost, tmpl.standard_price) AS unit_value, -- Relación corregida
-                    SUM(COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * tmpl.standard_price)) AS total_valuation,
-                    MAX(valuation.account_move_id) AS layer_account_move_id,
-                    MAX(quant.in_date) AS stock_move_date,
-                    MAX(valuation.create_date) AS valuation_date
-                FROM
-                    stock_quant AS quant
-                LEFT JOIN
-                    stock_valuation_layer AS valuation ON quant.product_id = valuation.product_id
-                LEFT JOIN
-                    product_product AS prod ON quant.product_id = prod.id
-                LEFT JOIN
-                    product_template AS tmpl ON prod.product_tmpl_id = tmpl.id -- Relación correcta a product.template
-                LEFT JOIN
-                    stock_location AS location ON quant.location_id = location.id
-                WHERE
-                    quant.quantity > 0
-                    AND location.usage IN ('internal', 'transit') -- Solo ubicaciones 'internal' y 'transit'
-                    AND (valuation.create_date IS NULL OR valuation.create_date <= %s)
-                GROUP BY
-                    quant.product_id, quant.location_id, quant.lot_id, valuation.unit_cost, tmpl.standard_price
-                LIMIT %s OFFSET %s
-            """
-            params = [report_date, batch_size, offset]
-            self.env.cr.execute(query, params)
+        # Ejecutar consulta con parámetros
+        params = (report_date, self.env.uid, report_date)
+        self.env.cr.execute(query, params)
 
-            # Obtener los resultados de la consulta
-            results = self.env.cr.dictfetchall()
-            if not results:
-                break
 
             # Insertar los datos en la tabla `inventory.valuation.report`
             for row in results:
@@ -576,18 +574,18 @@ class InventoryValuationWizard(models.TransientModel):
 
     def generate_report(self):
         """
-        Llamar al método para generar datos del reporte.
+        Genera el reporte basado en la fecha seleccionada.
         """
         if not self.report_date:
-            raise UserError(_("Por favor, seleccione una fecha para generar el reporte."))
-
+            raise UserError("Por favor, selecciona una fecha para generar el reporte.")
         self.env['inventory.valuation.report'].generate_data(self.report_date)
 
-        # Abrir la vista del reporte
+        # Devolver la vista del informe generado
         return {
             'type': 'ir.actions.act_window',
-            'name': _('Reporte de Valorización de Inventario'),
+            'name': 'Reporte de Valorización de Inventario',
             'res_model': 'inventory.valuation.report',
             'view_mode': 'tree,form',
-            'context': {'default_valuation_date': self.report_date},
+            'context': {'default_report_date': self.report_date},
         }
+
