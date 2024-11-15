@@ -501,108 +501,83 @@ class InventoryValuationReport(models.Model):
             record.total_valuation = record.quantity * record.unit_value
 
 
-    @api.model
     def generate_data(self, report_date):
-        """
-        Genera datos del informe procesando registros en lotes para optimizar el rendimiento.
-        """
-        _logger.info("Starting data generation for report date: %s", report_date)
+            """
+            Genera datos del informe utilizando SQL para optimizar el rendimiento.
+            """
+            # Limpiar datos anteriores
+            self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Limpiar datos anteriores
-        self.env.cr.execute("DELETE FROM inventory_valuation_report")
-
-        # Definir los parámetros comunes para la consulta
-        offset = 0
-        batch_size = 1000
-
-        while True:
-            records = self._fetch_data(report_date, batch_size, offset)
-
-            if not records:
-                _logger.info("No more records to process at offset: %s", offset)
-                break  # Salir si no hay más registros
-
-            _logger.info("Fetched %d records from offset %d", len(records), offset)
-
-            # Preparar datos para la inserción
-            insert_values = []
-            for record in records:
-                insert_values.append({
-                    'valuation_date': report_date,
-                    'product_id': record['product_id'],
-                    'location_id': record['location_id'],
-                    'lot_id': record['lot_id'],
-                    'quantity': record['quantity'],
-                    'reserved_quantity': record['reserved_quantity'],
-                    'layer_account_move_id': record['layer_account_move_id'],
-                    'stock_move_date': record['stock_move_date'],
-                    'move_reference': record['move_reference'],
-                    'create_uid': self.env.uid,
-                    'create_date': fields.Datetime.now(),
-                    'write_uid': self.env.uid,
-                    'write_date': fields.Datetime.now(),
-                })
-
-            _logger.info("Prepared %d records for insertion", len(insert_values))
-
-            # Insertar datos en lotes más pequeños
-            self._insert_in_batches(insert_values)
-
-            # Incrementar el offset para el siguiente lote
-            offset += batch_size
-
-    def _fetch_data(self, report_date, batch_size, offset):
-        """
-        Realiza la consulta SQL por lotes.
-        """
-        base_query = """
-            SELECT
-                quant.product_id AS product_id,
-                quant.location_id AS location_id,
-                quant.lot_id AS lot_id,
-                quant.quantity AS quantity,
-                quant.reserved_quantity AS reserved_quantity,
-                valuation.account_move_id AS layer_account_move_id,
-                move.date AS stock_move_date,
-                move.reference AS move_reference
-            FROM
-                stock_quant AS quant
-            LEFT JOIN
-                stock_valuation_layer AS valuation
-            ON
-                quant.product_id = valuation.product_id
-                AND quant.location_id = valuation.location_id
-                AND valuation.create_date <= %s
-            LEFT JOIN
-                stock_move AS move
-            ON
-                move.product_id = quant.product_id
-                AND move.state = 'done'
-                AND move.date <= %s
-            WHERE
-                quant.quantity > 0
-                AND quant.location_id IN (
-                    SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')
+            # Consulta SQL para obtener datos de quants y valuation layers
+            query = """
+                INSERT INTO inventory_valuation_report (
+                    valuation_date,
+                    product_id,
+                    location_id,
+                    lot_id,
+                    quantity,
+                    reserved_quantity,
+                    unit_value,
+                    total_valuation,
+                    layer_account_move_id,
+                    stock_move_date,
+                    move_reference,
+                    create_uid,
+                    create_date,
+                    write_uid,
+                    write_date
                 )
-            LIMIT %s OFFSET %s
-        """
-        # Ejecutar la consulta
-        self.env.cr.execute(base_query, (report_date, report_date, batch_size, offset))
-        result = self.env.cr.dictfetchall()
+                SELECT
+                    %s AS valuation_date,
+                    quant.product_id AS product_id,
+                    quant.location_id AS location_id,
+                    quant.lot_id AS lot_id,
+                    quant.quantity AS quantity,
+                    quant.reserved_quantity AS reserved_quantity,
+                    COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value,
+                    COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * pt.standard_price) AS total_valuation,
+                    valuation.account_move_id AS layer_account_move_id,
+                    move.date AS stock_move_date,
+                    move.reference AS move_reference,
+                    %s AS create_uid,
+                    NOW() AS create_date,
+                    %s AS write_uid,
+                    NOW() AS write_date
+                FROM
+                    stock_quant AS quant
+                LEFT JOIN
+                    stock_valuation_layer AS valuation
+                ON
+                    quant.product_id = valuation.product_id
+                    AND quant.location_id = valuation.location_id
+                    AND valuation.create_date <= %s
+                LEFT JOIN
+                    stock_move AS move
+                ON
+                    move.product_id = quant.product_id
+                    AND move.state = 'done'
+                    AND move.date <= %s
+                LEFT JOIN
+                    product_product AS pp
+                ON
+                    quant.product_id = pp.id
+                LEFT JOIN
+                    product_template AS pt
+                ON
+                    pp.product_tmpl_id = pt.id
+                WHERE
+                    quant.quantity > 0
+            """
+            # Ejecutar la consulta con parámetros
+            params = [
+                report_date,
+                self.env.uid,  # create_uid
+                self.env.uid,  # write_uid
+                report_date,   # valuation_date para valuation layers
+                report_date    # stock_move.date
+            ]
+            self.env.cr.execute(query, params)
 
-        # Depuración de resultados
-        _logger.info("Fetched records: %s", result)
-        return result
-
-    def _insert_in_batches(self, data):
-        """
-        Inserta registros en la tabla en lotes más pequeños.
-        """
-        batch_size = 500
-        for i in range(0, len(data), batch_size):
-            batch = data[i:i + batch_size]
-            _logger.info("Inserting batch of size: %d", len(batch))
-            self.env['inventory.valuation.report'].create(batch)
 
 
 
