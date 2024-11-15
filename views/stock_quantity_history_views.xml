@@ -92,6 +92,7 @@
                     </group>
                     <footer>
                         <button string="Generar" type="object" name="generate_report" class="btn-primary"/>
+                        <button string="Generar" type="object" name="generate_report_by_orm" class="btn-primary"/>
                         <button string="Cancelar" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>

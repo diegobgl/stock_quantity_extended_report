@@ -576,6 +576,86 @@ class InventoryValuationReport(models.Model):
             # Incrementar el offset para el siguiente lote
             offset += batch_size
 
+    def generate_data_by_orm(self, report_date):
+        """
+        Genera datos del informe utilizando el ORM de Odoo.
+        Filtra productos con stock disponible relacionado con stock.quant, stock.move, stock.valuation.layer y account.move.
+        """
+        InventoryValuationReport = self.env['inventory.valuation.report']
+        Product = self.env['product.product']
+
+        # Limpiar datos anteriores
+        InventoryValuationReport.sudo().search([]).unlink()
+
+        # Filtrar productos con stock disponible
+        quants = self.env['stock.quant'].search([
+            ('quantity', '>', 0),
+            ('location_id.usage', 'in', ['internal', 'transit'])  # Considerar solo ubicaciones internas y de tránsito
+        ])
+
+        product_ids = quants.mapped('product_id.id')
+        location_ids = quants.mapped('location_id.id')
+        lot_ids = quants.mapped('lot_id.id')
+
+        # Obtener movimientos de stock relacionados
+        moves = self.env['stock.move'].search([
+            ('product_id', 'in', product_ids),
+            ('state', '=', 'done'),
+            ('date', '<=', report_date)
+        ])
+
+        move_map = {move.product_id.id: move for move in moves}
+
+        # Obtener capas de valoración relacionadas
+        valuation_layers = self.env['stock.valuation.layer'].search([
+            ('product_id', 'in', product_ids),
+            ('create_date', '<=', report_date)
+        ])
+
+        valuation_map = {vl.product_id.id: vl for vl in valuation_layers}
+
+        # Obtener asientos contables relacionados
+        account_moves = self.env['account.move'].search([
+            ('id', 'in', valuation_layers.mapped('account_move_id.id')),
+            ('state', '=', 'posted')
+        ])
+
+        account_move_map = {am.id: am for am in account_moves}
+
+        # Generar datos del informe
+        records = []
+        for quant in quants:
+            product_id = quant.product_id.id
+            location_id = quant.location_id.id
+            lot_id = quant.lot_id.id
+
+            move = move_map.get(product_id)
+            valuation_layer = valuation_map.get(product_id)
+            account_move = account_move_map.get(valuation_layer.account_move_id.id) if valuation_layer else None
+
+            if not (move and valuation_layer and account_move):
+                continue
+
+            records.append({
+                'valuation_date': report_date,
+                'product_id': product_id,
+                'location_id': location_id,
+                'lot_id': lot_id,
+                'quantity': quant.quantity,
+                'reserved_quantity': quant.reserved_quantity,
+                'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else False,
+                'stock_move_date': move.date if move else False,
+                'move_reference': move.reference if move else '',
+                'create_uid': self.env.uid,
+                'create_date': fields.Datetime.now(),
+                'write_uid': self.env.uid,
+                'write_date': fields.Datetime.now(),
+            })
+
+        # Insertar los registros en lotes de 500
+        batch_size = 500
+        for i in range(0, len(records), batch_size):
+            InventoryValuationReport.sudo().create(records[i:i + batch_size])
 
 
 
@@ -601,3 +681,21 @@ class InventoryValuationWizard(models.TransientModel):
             'view_mode': 'tree,form',
             'context': {'default_report_date': self.report_date},
         }
+    
+    def generate_report_by_orm(self):
+        """
+        Genera el reporte basado en la fecha seleccionada.
+        """
+        if not self.report_date:
+            raise UserError("Por favor, selecciona una fecha para generar el reporte.")
+        self.env['inventory.valuation.report'].generate_data_by_orm(self.report_date)
+
+        # Devolver la vista del informe generado
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Reporte de Valorización de Inventario',
+            'res_model': 'inventory.valuation.report',
+            'view_mode': 'tree,form',
+            'context': {'default_report_date': self.report_date},
+        }
+
