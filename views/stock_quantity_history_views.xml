@@ -108,34 +108,6 @@
 
 
 
-        <record id="view_inventory_valuation_report_tree" model="ir.ui.view">
-            <field name="name">inventory.valuation.report.tree</field>
-            <field name="model">inventory.valuation.report</field>
-            <field name="arch" type="xml">
-              <tree string="Reporte de Valorización de Inventario" decoration-info="quantity > 0">
-                    <field name="valuation_date"/>
-                    <field name="product_id"/>
-                    <field name="valuation_account_id"/> 
-                    <field name="location_id"/>
-                    <field name="lot_id"/>
-                    <field name="quantity"/>
-                    <field name="reserved_quantity"/>
-                    <field name="unit_value"/>
-                    <field name="total_valuation"/>
-                    <field name="layer_account_move_id"/>
-                    <field name="quant_account_move_id"/>
-                    <field name="stock_move_date"/>
-                    <field name="move_reference"/>
-                    <field name="account_move_id"/>
-                </tree>
-            </field>
-        </record>
-
-
-
-
-
-
         <record id="view_inventory_valuation_report_search" model="ir.ui.view">
             <field name="name">inventory.valuation.report.search</field>
             <field name="model">inventory.valuation.report</field>
@@ -171,7 +143,6 @@
             <field name="name">Reporte de Valorización de Inventario</field>
             <field name="res_model">inventory.valuation.report</field>
             <field name="view_mode">tree,form</field>
-            <field name="search_view_id" ref="view_inventory_valuation_report_search" />
         </record>
 
         <menuitem id="menu_inventory_valuation_wizard" name="Generar Reporte de Valorización"
