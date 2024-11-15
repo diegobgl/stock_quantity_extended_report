@@ -517,8 +517,6 @@ class InventoryValuationReport(models.Model):
                     lot_id,
                     quantity,
                     reserved_quantity,
-                    unit_value,
-                    total_valuation,
                     layer_account_move_id,
                     stock_move_date,
                     move_reference,
