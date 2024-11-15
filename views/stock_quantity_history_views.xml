@@ -116,13 +116,20 @@
                     <field name="valuation_date"/>
                     <field name="product_id"/>
                     <field name="location_id"/>
+                    <field name="lot_id"/>
                     <field name="quantity"/>
+                    <field name="reserved_quantity"/>
                     <field name="unit_value"/>
                     <field name="total_valuation"/>
+                    <field name="layer_account_move_id"/>
+                    <field name="quant_account_move_id"/>
+                    <field name="stock_move_date"/>
+                    <field name="move_reference"/>
                     <field name="account_move_id"/>
                 </tree>
             </field>
         </record>
+
 
         <record id="action_inventory_valuation_report" model="ir.actions.act_window">
             <field name="name">Reporte de Valorización de Inventario</field>
