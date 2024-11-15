@@ -495,7 +495,7 @@ class InventoryValuationReport(models.Model):
         for record in self:
             record.unit_value = record.product_id.standard_price
             
-    @api.depends('quantity', 'unit_value')
+    @api.depends('quantity')
     def _compute_total_valuation(self):
         for record in self:
             record.total_valuation = record.quantity * record.unit_value
