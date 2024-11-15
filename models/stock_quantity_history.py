@@ -497,72 +497,101 @@ class InventoryValuationReport(models.Model):
             record.total_valuation = record.quantity * record.unit_value
 
 
-    @api.model
     def generate_data(self, report_date):
         """
-        Genera los datos del informe en lotes para evitar bloqueos.
+        Genera datos del informe utilizando SQL optimizado y procesando registros por lotes de 500.
         """
-        # Limpiar datos previos
+        # Limpiar datos anteriores
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Contar registros totales a procesar
-        self.env.cr.execute("""
-            SELECT COUNT(*)
-            FROM stock_quant AS quant
-            LEFT JOIN stock_valuation_layer AS valuation ON valuation.product_id = quant.product_id
-            WHERE
-                quant.quantity > 0
-                AND quant.location_id IN (
-                    SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')
-                )
-                AND (valuation.create_date <= %s OR valuation.create_date IS NULL)
-        """, (report_date,))
-        total_records = self.env.cr.fetchone()[0]
-
-        batch_size = 1000  # Tamaño del lote
+        # Inicializar variables para el manejo de lotes
+        batch_size = 500
         offset = 0
+        total_records = 1  # Un valor inicial mayor a 0 para entrar en el bucle
 
-        while offset < total_records:
-            query = """
+        while total_records > 0:
+            # Consulta SQL para obtener datos relacionados sin cálculos redundantes, por lotes
+            query = f"""
                 INSERT INTO inventory_valuation_report (
-                    valuation_date, product_id, location_id, lot_id, quantity,
-                    reserved_quantity, account_move_id, stock_move_date, move_reference, create_uid, create_date
+                    valuation_date,
+                    product_id,
+                    location_id,
+                    lot_id,
+                    quantity,
+                    reserved_quantity,
+                    unit_value,
+                    total_valuation,
+                    layer_account_move_id,
+                    stock_move_date,
+                    move_reference,
+                    create_uid,
+                    create_date,
+                    write_uid,
+                    write_date
                 )
-                SELECT
+                SELECT DISTINCT ON (quant.id, valuation.id)  -- Evitar duplicados basándose en claves únicas
                     %s AS valuation_date,
                     quant.product_id AS product_id,
                     quant.location_id AS location_id,
                     quant.lot_id AS lot_id,
                     quant.quantity AS quantity,
                     quant.reserved_quantity AS reserved_quantity,
-                    valuation.account_move_id AS account_move_id,
-                    quant.in_date AS stock_move_date,
+                    valuation.unit_cost AS unit_value,
+                    NULL AS total_valuation, -- Sin cálculos, será manejado por Python o después
+                    valuation.account_move_id AS layer_account_move_id,
+                    move.date AS stock_move_date,
                     move.reference AS move_reference,
                     %s AS create_uid,
-                    NOW() AS create_date
+                    NOW() AS create_date,
+                    %s AS write_uid,
+                    NOW() AS write_date
                 FROM
                     stock_quant AS quant
                 LEFT JOIN
-                    stock_valuation_layer AS valuation ON valuation.product_id = quant.product_id
+                    stock_valuation_layer AS valuation
+                ON
+                    quant.product_id = valuation.product_id
+                    AND quant.location_id = valuation.location_id
+                    AND valuation.create_date <= %s
                 LEFT JOIN
-                    stock_move AS move ON move.id = valuation.stock_move_id
+                    stock_move AS move
+                ON
+                    move.product_id = quant.product_id
+                    AND move.state = 'done'
+                    AND move.date <= %s
+                LEFT JOIN
+                    product_product AS pp
+                ON
+                    quant.product_id = pp.id
+                LEFT JOIN
+                    product_template AS pt
+                ON
+                    pp.product_tmpl_id = pt.id
                 WHERE
                     quant.quantity > 0
                     AND quant.location_id IN (
-                        SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')
+                        SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')  -- Solo ubicaciones relevantes
                     )
-                    AND (valuation.create_date <= %s OR valuation.create_date IS NULL)
-                ORDER BY quant.id
-                LIMIT %s OFFSET %s
+                LIMIT {batch_size} OFFSET {offset}
             """
-            # Ejecutar lote
-            self.env.cr.execute(query, (report_date, self.env.uid, report_date, batch_size, offset))
-            offset += batch_size  # Incrementar el offset
 
-        # Confirmar inserciones
-        self.env.cr.commit()
+            # Ejecutar la consulta con parámetros
+            params = [
+                report_date,
+                self.env.uid,  # create_uid
+                self.env.uid,  # write_uid
+                report_date,   # valuation_date para valuation layers
+                report_date    # stock_move.date
+            ]
+            self.env.cr.execute(query, params)
 
-   
+            # Contar registros procesados en este lote
+            total_records = self.env.cr.rowcount
+            offset += batch_size
+
+            # Confirmar transacciones intermedias para liberar memoria y mejorar rendimiento
+            self.env.cr.commit()
+
 
 class InventoryValuationWizard(models.TransientModel):
     _name = 'inventory.valuation.wizard'
