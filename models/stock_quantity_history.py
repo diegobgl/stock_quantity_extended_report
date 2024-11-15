@@ -495,33 +495,26 @@ class InventoryValuationReport(models.Model):
         for record in self:
             record.unit_value = record.product_id.standard_price
             
-    @api.depends('quantity')
-    def _compute_total_valuation(self):
-        for record in self:
-            record.total_valuation = record.quantity * record.unit_value
-
-
     def generate_data(self, report_date):
         """
-        Genera datos del informe procesando registros en lotes para optimizar el rendimiento.
+        Genera datos del informe procesando registros en lotes.
         """
         # Limpiar datos anteriores
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Parámetros de configuración de lotes
-        query_batch_size = 1000  # Cantidad de registros a consultar por lote
-        insert_batch_size = 500  # Cantidad de registros a insertar por lote
-        offset = 0  # Control de desplazamiento para la consulta por lotes
+        # Configuración de lotes
+        batch_size = 1000
+        offset = 0
 
-        # Consulta SQL base
+        # Consulta base para recuperación de datos
         base_query = """
             SELECT
-                quant.product_id AS product_id,
-                quant.location_id AS location_id,
-                quant.lot_id AS lot_id,
-                quant.quantity AS quantity,
-                quant.reserved_quantity AS reserved_quantity,
-                valuation.account_move_id AS layer_account_move_id,
+                quant.product_id,
+                quant.location_id,
+                quant.lot_id,
+                quant.quantity,
+                quant.reserved_quantity,
+                valuation.account_move_id,
                 move.date AS stock_move_date,
                 move.reference AS move_reference
             FROM
@@ -540,22 +533,18 @@ class InventoryValuationReport(models.Model):
                 AND move.date <= %s
             WHERE
                 quant.quantity > 0
+            LIMIT %s OFFSET %s
         """
 
         while True:
-            # Añadir límite y desplazamiento a la consulta base
-            paginated_query = f"""
-                {base_query}
-                LIMIT {query_batch_size} OFFSET {offset}
-            """
-            self.env.cr.execute(paginated_query, [report_date, report_date])
+            # Ejecutar consulta en lotes
+            self.env.cr.execute(base_query, (report_date, report_date, batch_size, offset))
             records = self.env.cr.dictfetchall()
 
             if not records:
-                # Si no hay más registros, salir del bucle
-                break
+                break  # Salir si no hay más registros
 
-            # Preparar los datos para la inserción
+            # Preparar registros para insertar
             insert_values = []
             for record in records:
                 insert_values.append({
@@ -574,13 +563,12 @@ class InventoryValuationReport(models.Model):
                     'write_date': fields.Datetime.now(),
                 })
 
-            # Insertar los datos en lotes más pequeños
-            for i in range(0, len(insert_values), insert_batch_size):
-                batch = insert_values[i:i + insert_batch_size]
+            # Inserción en lotes
+            for i in range(0, len(insert_values), 500):  # Inserta en lotes de 500 registros
+                batch = insert_values[i:i + 500]
                 self.env['inventory.valuation.report'].create(batch)
 
-            # Incrementar el offset para el siguiente lote
-            offset += query_batch_size
+            offset += batch_size  # Incrementar el desplazamiento para el próximo lote
 
 
 
