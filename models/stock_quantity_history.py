@@ -498,31 +498,14 @@ class InventoryValuationReport(models.Model):
 
     def generate_data(self, report_date):
         """
-        Genera datos del informe utilizando SQL para insertar registros y Python para cálculos adicionales.
-        Los registros se procesan en lotes para evitar bloqueos o duplicados.
+        Genera datos del informe procesando registros en lotes para optimizar el rendimiento.
         """
         # Limpiar datos anteriores
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Consulta SQL para insertar datos básicos
-        query = """
-            INSERT INTO inventory_valuation_report (
-                valuation_date,
-                product_id,
-                location_id,
-                lot_id,
-                quantity,
-                reserved_quantity,
-                layer_account_move_id,
-                stock_move_date,
-                move_reference,
-                create_uid,
-                create_date,
-                write_uid,
-                write_date
-            )
+        # Consulta base para obtener datos por lotes
+        base_query = """
             SELECT
-                %s AS valuation_date,
                 quant.product_id AS product_id,
                 quant.location_id AS location_id,
                 quant.lot_id AS lot_id,
@@ -530,11 +513,7 @@ class InventoryValuationReport(models.Model):
                 quant.reserved_quantity AS reserved_quantity,
                 valuation.account_move_id AS layer_account_move_id,
                 move.date AS stock_move_date,
-                move.reference AS move_reference,
-                %s AS create_uid,
-                NOW() AS create_date,
-                %s AS write_uid,
-                NOW() AS write_date
+                move.reference AS move_reference
             FROM
                 stock_quant AS quant
             LEFT JOIN
@@ -554,40 +533,54 @@ class InventoryValuationReport(models.Model):
                 AND quant.location_id IN (
                     SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')
                 )
+            LIMIT %s OFFSET %s
         """
 
-        # Ejecutar la consulta con parámetros
-        params = [
-            report_date,
-            self.env.uid,  # create_uid
-            self.env.uid,  # write_uid
-            report_date,   # valuation_date para valuation layers
-            report_date    # stock_move.date
-        ]
-        self.env.cr.execute(query, params)
-
-        # Iterar por lotes para calcular `unit_value` y `total_valuation`
         offset = 0
-        limit = 500
-        while True:
-            # Buscar registros en lotes
-            records = self.search([], offset=offset, limit=limit)
-            if not records:
-                break  # Terminar si no hay más registros
+        batch_size = 1000
 
-            for record in records:
-                # Calcular unit_value y total_valuation
-                valuation_layer = self.env['stock.valuation.layer'].search([
-                    ('product_id', '=', record.product_id.id),
-                    ('create_date', '<=', report_date)
-                ], limit=1)
+    while True:
+        # Ejecutar la consulta por lotes
+        self.env.cr.execute(base_query, (report_date, report_date, batch_size, offset))
+        records = self.env.cr.dictfetchall()
 
-                # Asignar valores calculados
-                record.unit_value = valuation_layer.unit_cost if valuation_layer else record.product_id.standard_price
-                record.total_valuation = record.quantity * record.unit_value
+        if not records:
+            break  # Salir si no hay más registros
 
-            # Incrementar el offset para el siguiente lote
-            offset += limit
+        # Preparar datos para la inserción
+        insert_values = []
+        for record in records:
+            insert_values.append({
+                'valuation_date': report_date,
+                'product_id': record['product_id'],
+                'location_id': record['location_id'],
+                'lot_id': record['lot_id'],
+                'quantity': record['quantity'],
+                'reserved_quantity': record['reserved_quantity'],
+                'layer_account_move_id': record['layer_account_move_id'],
+                'stock_move_date': record['stock_move_date'],
+                'move_reference': record['move_reference'],
+                'create_uid': self.env.uid,
+                'create_date': fields.Datetime.now(),
+                'write_uid': self.env.uid,
+                'write_date': fields.Datetime.now(),
+            })
+
+        # Insertar datos en lotes más pequeños
+        self._insert_in_batches(insert_values)
+
+        # Incrementar el offset para el siguiente lote
+        offset += batch_size
+
+def _insert_in_batches(self, data):
+    """
+    Inserta registros en la tabla en lotes más pequeños.
+    """
+    batch_size = 500
+    for i in range(0, len(data), batch_size):
+        batch = data[i:i + batch_size]
+        self.env['inventory.valuation.report'].create(batch)
+
 
 
 class InventoryValuationWizard(models.TransientModel):
