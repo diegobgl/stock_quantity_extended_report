@@ -546,22 +546,22 @@ class InventoryValuationReport(models.Model):
 
 
             # Insertar los datos en la tabla `inventory.valuation.report`
-            for row in results:
-                self.env['inventory.valuation.report'].create({
-                    'valuation_date': row['valuation_date'] or report_date,
-                    'product_id': row['product_id'],
-                    'location_id': row['location_id'],
-                    'lot_id': row['lot_id'],
-                    'quantity': row['quantity'],
-                    'reserved_quantity': row['reserved_quantity'],
-                    'unit_value': row['unit_value'],
-                    'total_valuation': row['total_valuation'],
-                    'layer_account_move_id': row['layer_account_move_id'],
-                    'stock_move_date': row['stock_move_date'],
-                })
+        for row in results:
+            self.env['inventory.valuation.report'].create({
+                'valuation_date': row['valuation_date'] or report_date,
+                'product_id': row['product_id'],
+                'location_id': row['location_id'],
+                'lot_id': row['lot_id'],
+                'quantity': row['quantity'],
+                'reserved_quantity': row['reserved_quantity'],
+                'unit_value': row['unit_value'],
+                'total_valuation': row['total_valuation'],
+                'layer_account_move_id': row['layer_account_move_id'],
+                'stock_move_date': row['stock_move_date'],
+            })
 
-            # Incrementar el offset para el siguiente lote
-            offset += batch_size
+        # Incrementar el offset para el siguiente lote
+        offset += batch_size
 
 
    
