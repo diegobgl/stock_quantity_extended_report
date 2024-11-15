@@ -496,98 +496,98 @@ class InventoryValuationReport(models.Model):
             record.total_valuation = record.quantity * record.unit_value
 
 
-def generate_data(self, report_date):
-    """
-    Genera datos del informe utilizando SQL para insertar registros y Python para cálculos adicionales.
-    Los registros se procesan en lotes para evitar bloqueos o duplicados.
-    """
-    # Limpiar datos anteriores
-    self.env.cr.execute("DELETE FROM inventory_valuation_report")
+    def generate_data(self, report_date):
+        """
+        Genera datos del informe utilizando SQL para insertar registros y Python para cálculos adicionales.
+        Los registros se procesan en lotes para evitar bloqueos o duplicados.
+        """
+        # Limpiar datos anteriores
+        self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-    # Consulta SQL para insertar datos básicos
-    query = """
-        INSERT INTO inventory_valuation_report (
-            valuation_date,
-            product_id,
-            location_id,
-            lot_id,
-            quantity,
-            reserved_quantity,
-            layer_account_move_id,
-            stock_move_date,
-            move_reference,
-            create_uid,
-            create_date,
-            write_uid,
-            write_date
-        )
-        SELECT
-            %s AS valuation_date,
-            quant.product_id AS product_id,
-            quant.location_id AS location_id,
-            quant.lot_id AS lot_id,
-            quant.quantity AS quantity,
-            quant.reserved_quantity AS reserved_quantity,
-            valuation.account_move_id AS layer_account_move_id,
-            move.date AS stock_move_date,
-            move.reference AS move_reference,
-            %s AS create_uid,
-            NOW() AS create_date,
-            %s AS write_uid,
-            NOW() AS write_date
-        FROM
-            stock_quant AS quant
-        LEFT JOIN
-            stock_valuation_layer AS valuation
-        ON
-            quant.product_id = valuation.product_id
-            AND quant.location_id = valuation.location_id
-            AND valuation.create_date <= %s
-        LEFT JOIN
-            stock_move AS move
-        ON
-            move.product_id = quant.product_id
-            AND move.state = 'done'
-            AND move.date <= %s
-        WHERE
-            quant.quantity > 0
-            AND quant.location_id IN (
-                SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')
+        # Consulta SQL para insertar datos básicos
+        query = """
+            INSERT INTO inventory_valuation_report (
+                valuation_date,
+                product_id,
+                location_id,
+                lot_id,
+                quantity,
+                reserved_quantity,
+                layer_account_move_id,
+                stock_move_date,
+                move_reference,
+                create_uid,
+                create_date,
+                write_uid,
+                write_date
             )
-    """
+            SELECT
+                %s AS valuation_date,
+                quant.product_id AS product_id,
+                quant.location_id AS location_id,
+                quant.lot_id AS lot_id,
+                quant.quantity AS quantity,
+                quant.reserved_quantity AS reserved_quantity,
+                valuation.account_move_id AS layer_account_move_id,
+                move.date AS stock_move_date,
+                move.reference AS move_reference,
+                %s AS create_uid,
+                NOW() AS create_date,
+                %s AS write_uid,
+                NOW() AS write_date
+            FROM
+                stock_quant AS quant
+            LEFT JOIN
+                stock_valuation_layer AS valuation
+            ON
+                quant.product_id = valuation.product_id
+                AND quant.location_id = valuation.location_id
+                AND valuation.create_date <= %s
+            LEFT JOIN
+                stock_move AS move
+            ON
+                move.product_id = quant.product_id
+                AND move.state = 'done'
+                AND move.date <= %s
+            WHERE
+                quant.quantity > 0
+                AND quant.location_id IN (
+                    SELECT id FROM stock_location WHERE usage IN ('internal', 'transit')
+                )
+        """
 
-    # Ejecutar la consulta con parámetros
-    params = [
-        report_date,
-        self.env.uid,  # create_uid
-        self.env.uid,  # write_uid
-        report_date,   # valuation_date para valuation layers
-        report_date    # stock_move.date
-    ]
-    self.env.cr.execute(query, params)
+        # Ejecutar la consulta con parámetros
+        params = [
+            report_date,
+            self.env.uid,  # create_uid
+            self.env.uid,  # write_uid
+            report_date,   # valuation_date para valuation layers
+            report_date    # stock_move.date
+        ]
+        self.env.cr.execute(query, params)
 
-    # Iterar por lotes para calcular `unit_value` y `total_valuation`
-    offset = 0
-    limit = 500
-    while True:
-        # Buscar registros en lotes
-        records = self.search([], offset=offset, limit=limit)
-        if not records:
-            break  # Terminar si no hay más registros
+        # Iterar por lotes para calcular `unit_value` y `total_valuation`
+        offset = 0
+        limit = 500
+        while True:
+            # Buscar registros en lotes
+            records = self.search([], offset=offset, limit=limit)
+            if not records:
+                break  # Terminar si no hay más registros
 
-        for record in records:
-            # Calcular unit_value y total_valuation
-            valuation_layer = self.env['stock.valuation.layer'].search([
-                ('product_id', '=', record.product_id.id),
-                ('create_date', '<=', report_date)
-            ], limit=1)
+            for record in records:
+                # Calcular unit_value y total_valuation
+                valuation_layer = self.env['stock.valuation.layer'].search([
+                    ('product_id', '=', record.product_id.id),
+                    ('create_date', '<=', report_date)
+                ], limit=1)
 
-            # Asignar valores calculados
-            record.unit_value = valuation_layer.unit_cost if valuation_layer else record.product_id.standard_price
-            record.total_valuation = record.quantity * record.unit_value
+                # Asignar valores calculados
+                record.unit_value = valuation_layer.unit_cost if valuation_layer else record.product_id.standard_price
+                record.total_valuation = record.quantity * record.unit_value
 
-        # Incrementar el offset para el siguiente lote
-        offset += limit
+            # Incrementar el offset para el siguiente lote
+            offset += limit
 
 
 class InventoryValuationWizard(models.TransientModel):
