@@ -8,6 +8,7 @@
     'depends': ['stock','stock_account', 'account'],
     'data': [
         'views/stock_quantity_history_views.xml',
+        'security/ir.model.access.csv',
     ],
     'installable': True,
     'application': False,
