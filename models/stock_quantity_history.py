@@ -490,18 +490,20 @@ class InventoryValuationReport(models.Model):
     move_reference = fields.Char(string='Referencia del Movimiento', readonly=True)
     account_move_id = fields.Many2one('account.move', string='Asiento Contable General')  # Añadir este campo
 
-    @api.depends('product_id', 'layer_account_move_id')
+    @api.depends('layer_account_move_id', 'product_id')
     def _compute_unit_value(self):
-        """
-        Calcula el precio unitario promedio.
-        Si hay una capa de valoración (`layer_account_move_id`), toma el costo unitario de ahí.
-        En caso contrario, utiliza el precio estándar del producto.
-        """
         for record in self:
+            # Verificar si existe una capa de valoración relacionada
             if record.layer_account_move_id:
-                record.unit_value = record.layer_account_move_id.unit_cost
+                valuation_layer = self.env['stock.valuation.layer'].search([
+                    ('account_move_id', '=', record.layer_account_move_id.id),
+                    ('product_id', '=', record.product_id.id)
+                ], limit=1)
+                record.unit_value = valuation_layer.unit_cost if valuation_layer else record.product_id.standard_price
             else:
+                # Si no hay capa de valoración, usar el precio estándar
                 record.unit_value = record.product_id.standard_price
+
 
     @api.depends('quantity', 'unit_value')
     def _compute_total_valuation(self):
