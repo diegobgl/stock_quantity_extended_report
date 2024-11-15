@@ -108,35 +108,28 @@
 
 
 
-        <record id="view_inventory_valuation_report_search" model="ir.ui.view">
-            <field name="name">inventory.valuation.report.search</field>
+        <record id="view_inventory_valuation_report_tree" model="ir.ui.view">
+            <field name="name">inventory.valuation.report.tree</field>
             <field name="model">inventory.valuation.report</field>
             <field name="arch" type="xml">
-                <search string="Buscar Reporte de Valorización">
-                    <!-- Campos para búsqueda -->
+              <tree string="Reporte de Valorización de Inventario" decoration-info="quantity > 0">
                     <field name="valuation_date"/>
                     <field name="product_id"/>
+                    <field name="valuation_account_id"/> 
                     <field name="location_id"/>
                     <field name="lot_id"/>
+                    <field name="quantity"/>
+                    <field name="reserved_quantity"/>
+                    <field name="unit_value"/>
+                    <field name="total_valuation"/>
+                    <field name="layer_account_move_id"/>
+                    <field name="quant_account_move_id"/>
+                    <field name="stock_move_date"/>
                     <field name="move_reference"/>
                     <field name="account_move_id"/>
-
-                    <!-- Filtros rápidos -->
-                    <filter string="Con Cantidad Disponible" domain="[('quantity', '>', 0)]"/>
-                    <filter string="Con Asiento Contable" domain="[('account_move_id', '!=', False)]"/>
-                    <filter string="Con Reservas" domain="[('reserved_quantity', '>', 0)]"/>
-
-                    <!-- Agrupaciones -->
-                    <group expand="1" string="Agrupar por">
-                        <filter string="Producto" context="{'group_by': 'product_id'}"/>
-                        <filter string="Ubicación" context="{'group_by': 'location_id'}"/>
-                        <filter string="Fecha" context="{'group_by': 'valuation_date'}"/>
-                    </group>
-                </search>
+                </tree>
             </field>
         </record>
-
-
 
 
         <record id="action_inventory_valuation_report" model="ir.actions.act_window">
