@@ -576,7 +576,7 @@ class InventoryValuationReport(models.Model):
             # Incrementar el offset para el siguiente lote
             offset += batch_size
 
-    def generate_data(self, report_date):
+    def generate_data_by_orm(self, report_date):
         """
         Genera datos del informe utilizando ORM, filtrando ubicaciones de tipo interno y tránsito.
         """
