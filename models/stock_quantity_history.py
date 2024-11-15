@@ -1,6 +1,8 @@
 from odoo import models, fields, api, _
 from odoo.tools.misc import format_datetime
 from odoo.osv import expression
+import logging
+
 
 
 class StockQuantityHistoryExtended(models.TransientModel):
@@ -467,6 +469,9 @@ class StockValuationLayer(models.Model):
             )
             layer.last_move_date = last_move.date if last_move else False
 
+
+_logger = logging.getLogger(__name__)
+
 class InventoryValuationReport(models.Model):
     _name = 'inventory.valuation.report'
     _description = 'Reporte de Valorización de Inventario con Ubicaciones'
@@ -501,6 +506,8 @@ class InventoryValuationReport(models.Model):
         """
         Genera datos del informe procesando registros en lotes para optimizar el rendimiento.
         """
+        _logger.info("Starting data generation for report date: %s", report_date)
+
         # Limpiar datos anteriores
         self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
@@ -512,7 +519,10 @@ class InventoryValuationReport(models.Model):
             records = self._fetch_data(report_date, batch_size, offset)
 
             if not records:
+                _logger.info("No more records to process at offset: %s", offset)
                 break  # Salir si no hay más registros
+
+            _logger.info("Fetched %d records from offset %d", len(records), offset)
 
             # Preparar datos para la inserción
             insert_values = []
@@ -532,6 +542,8 @@ class InventoryValuationReport(models.Model):
                     'write_uid': self.env.uid,
                     'write_date': fields.Datetime.now(),
                 })
+
+            _logger.info("Prepared %d records for insertion", len(insert_values))
 
             # Insertar datos en lotes más pequeños
             self._insert_in_batches(insert_values)
@@ -576,7 +588,11 @@ class InventoryValuationReport(models.Model):
         """
         # Ejecutar la consulta
         self.env.cr.execute(base_query, (report_date, report_date, batch_size, offset))
-        return self.env.cr.dictfetchall()
+        result = self.env.cr.dictfetchall()
+
+        # Depuración de resultados
+        _logger.info("Fetched records: %s", result)
+        return result
 
     def _insert_in_batches(self, data):
         """
@@ -585,8 +601,8 @@ class InventoryValuationReport(models.Model):
         batch_size = 500
         for i in range(0, len(data), batch_size):
             batch = data[i:i + batch_size]
+            _logger.info("Inserting batch of size: %d", len(batch))
             self.env['inventory.valuation.report'].create(batch)
-
 
 
 
