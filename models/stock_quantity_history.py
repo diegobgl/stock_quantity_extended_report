@@ -496,20 +496,6 @@ class InventoryValuationReport(models.Model):
             record.total_valuation = record.quantity * record.unit_value
 
 
-class InventoryValuationReport(models.Model):
-    _name = 'inventory.valuation.report'
-    _description = 'Reporte de Valorización de Inventario con Ubicaciones'
-
-    valuation_date = fields.Date(string='Fecha de Valorización', readonly=True)
-    product_id = fields.Many2one('product.product', string='Producto')
-    location_id = fields.Many2one('stock.location', string='Ubicación')
-    lot_id = fields.Many2one('stock.lot', string='Lote')
-    quantity = fields.Float(string='Cantidad Disponible')
-    reserved_quantity = fields.Float(string='Cantidad Reservada')
-    layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)')
-    stock_move_date = fields.Datetime(string='Fecha del Movimiento')
-    move_reference = fields.Char(string='Referencia del Movimiento')
-
     @api.model
     def generate_data(self, report_date):
         """
