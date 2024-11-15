@@ -534,8 +534,6 @@ class InventoryValuationReport(models.Model):
                     quant.lot_id AS lot_id,
                     quant.quantity AS quantity,
                     quant.reserved_quantity AS reserved_quantity,
-                    COALESCE(valuation.unit_cost, pt.standard_price) AS unit_value,
-                    COALESCE(quant.quantity * valuation.unit_cost, quant.quantity * pt.standard_price) AS total_valuation,
                     valuation.account_move_id AS layer_account_move_id,
                     move.date AS stock_move_date,
                     move.reference AS move_reference,
