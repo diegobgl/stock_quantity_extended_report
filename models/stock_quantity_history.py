@@ -631,9 +631,11 @@ class InventoryValuationReport(models.Model):
             # Incrementar el offset para el siguiente lote
             offset += batch_size
 
+
+    #version orm correginda precio unitario
     def generate_data_by_orm(self, report_date):
         """
-        Genera datos del informe utilizando el ORM, optimizado en lotes.
+        Genera datos del informe utilizando el ORM, procesando en lotes para mayor eficiencia.
         Incluye información de cuentas contables, últimos movimientos y valores relacionados.
         """
         # Eliminar registros previos para evitar duplicados
@@ -670,6 +672,14 @@ class InventoryValuationReport(models.Model):
                         ('date', '<=', report_date)
                     ], limit=1, order='date desc')
 
+                    # Calcular el precio unitario
+                    unit_value = product.standard_price  # Valor predeterminado
+                    if valuation_layer:
+                        unit_value = valuation_layer.unit_cost or product.standard_price
+
+                    # Verificar que se haya asignado un valor unitario válido
+                    unit_value = unit_value if unit_value else 0.0
+
                     # Crear un diccionario con los datos del registro
                     records_to_create.append({
                         'valuation_date': report_date,
@@ -678,6 +688,8 @@ class InventoryValuationReport(models.Model):
                         'lot_id': quant.lot_id.id if quant.lot_id else None,
                         'quantity': quant.quantity,
                         'reserved_quantity': quant.reserved_quantity,
+                        'unit_value': unit_value,
+                        'total_valuation': unit_value * quant.quantity,  # Calcular el total
                         'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
                         'stock_move_date': last_move.date if last_move else None,
                         'move_reference': last_move.reference if last_move else None,
@@ -694,6 +706,75 @@ class InventoryValuationReport(models.Model):
 
             # Progresar en el log para grandes volúmenes de datos
             _logger.info("Processed batch %s/%s", offset + batch_size, total_products)
+
+
+
+
+
+
+    # def generate_data_by_orm(self, report_date):
+    #     """
+    #     Genera datos del informe utilizando el ORM, optimizado en lotes.
+    #     Incluye información de cuentas contables, últimos movimientos y valores relacionados.
+    #     """
+    #     # Eliminar registros previos para evitar duplicados
+    #     self.search([]).unlink()
+
+    #     # Configuración para dividir la generación en lotes
+    #     batch_size = 500
+    #     products = self.env['product.product'].search([])  # Obtener todos los productos
+    #     total_products = len(products)
+    #     batches = range(0, total_products, batch_size)
+
+    #     for offset in batches:
+    #         # Obtener un lote de productos
+    #         product_batch = products[offset:offset + batch_size]
+            
+    #         # Preparar registros para insertar
+    #         records_to_create = []
+    #         for product in product_batch:
+    #             quants = self.env['stock.quant'].search([
+    #                 ('product_id', '=', product.id),
+    #                 ('quantity', '>', 0),
+    #                 ('location_id.usage', 'in', ['internal', 'transit'])  # Filtrar ubicaciones
+    #             ])
+    #             for quant in quants:
+    #                 # Buscar información relacionada
+    #                 valuation_layer = self.env['stock.valuation.layer'].search([
+    #                     ('product_id', '=', quant.product_id.id),
+    #                     ('create_date', '<=', report_date)
+    #                 ], limit=1, order='create_date desc')
+
+    #                 last_move = self.env['stock.move'].search([
+    #                     ('product_id', '=', quant.product_id.id),
+    #                     ('state', '=', 'done'),
+    #                     ('date', '<=', report_date)
+    #                 ], limit=1, order='date desc')
+
+    #                 # Crear un diccionario con los datos del registro
+    #                 records_to_create.append({
+    #                     'valuation_date': report_date,
+    #                     'product_id': quant.product_id.id,
+    #                     'location_id': quant.location_id.id,
+    #                     'lot_id': quant.lot_id.id if quant.lot_id else None,
+    #                     'quantity': quant.quantity,
+    #                     'reserved_quantity': quant.reserved_quantity,
+    #                     'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
+    #                     'stock_move_date': last_move.date if last_move else None,
+    #                     'move_reference': last_move.reference if last_move else None,
+    #                     'account_move_id': last_move.account_move_ids[:1].id if last_move else None,
+    #                     'create_uid': self.env.uid,
+    #                     'create_date': fields.Datetime.now(),
+    #                     'write_uid': self.env.uid,
+    #                     'write_date': fields.Datetime.now(),
+    #                 })
+
+    #         # Insertar los registros en lotes
+    #         if records_to_create:
+    #             self.create(records_to_create)
+
+    #         # Progresar en el log para grandes volúmenes de datos
+    #         _logger.info("Processed batch %s/%s", offset + batch_size, total_products)
 
 
 
