@@ -502,29 +502,56 @@ class InventoryValuationReport(models.Model):
         for record in self:
             record.valuation_account_id = record.product_id.categ_id.property_stock_valuation_account_id
 
-
-    @api.depends('layer_account_move_id', 'product_id')
+    @api.depends('product_id', 'location_id')
     def _compute_unit_value(self):
+        """
+        Cálculo del valor unitario basado en el precio promedio ponderado o el costo estándar.
+        """
         for record in self:
-            # Verificar si existe una capa de valoración relacionada
-            if record.layer_account_move_id:
+            if record.product_id:
+                # Intentar obtener el costo promedio ponderado del último movimiento
                 valuation_layer = self.env['stock.valuation.layer'].search([
-                    ('account_move_id', '=', record.layer_account_move_id.id),
-                    ('product_id', '=', record.product_id.id)
-                ], limit=1)
+                    ('product_id', '=', record.product_id.id),
+                    ('create_date', '<=', record.valuation_date)
+                ], order='create_date desc', limit=1)
+
+                # Usar el precio del valuation_layer o el costo estándar
                 record.unit_value = valuation_layer.unit_cost if valuation_layer else record.product_id.standard_price
             else:
-                # Si no hay capa de valoración, usar el precio estándar
-                record.unit_value = record.product_id.standard_price
+                record.unit_value = 0.0
 
 
-    @api.depends('quantity', 'unit_value')
+    @api.depends('unit_value', 'quantity')
     def _compute_total_valuation(self):
         """
-        Calcula el valor total valorizado multiplicando la cantidad disponible por el precio unitario.
+        Cálculo del valor total como cantidad disponible * valor unitario.
         """
         for record in self:
-            record.total_valuation = record.quantity * record.unit_value
+            record.total_valuation = record.unit_value * record.quantity if record.quantity > 0 else 0.0
+
+
+    # @api.depends('layer_account_move_id', 'product_id')
+    # def _compute_unit_value(self):
+    #     for record in self:
+    #         # Verificar si existe una capa de valoración relacionada
+    #         if record.layer_account_move_id:
+    #             valuation_layer = self.env['stock.valuation.layer'].search([
+    #                 ('account_move_id', '=', record.layer_account_move_id.id),
+    #                 ('product_id', '=', record.product_id.id)
+    #             ], limit=1)
+    #             record.unit_value = valuation_layer.unit_cost if valuation_layer else record.product_id.standard_price
+    #         else:
+    #             # Si no hay capa de valoración, usar el precio estándar
+    #             record.unit_value = record.product_id.standard_price
+
+
+    # @api.depends('quantity', 'unit_value')
+    # def _compute_total_valuation(self):
+    #     """
+    #     Calcula el valor total valorizado multiplicando la cantidad disponible por el precio unitario.
+    #     """
+    #     for record in self:
+    #         record.total_valuation = record.quantity * record.unit_value
             
     def generate_data(self, report_date):
         """
