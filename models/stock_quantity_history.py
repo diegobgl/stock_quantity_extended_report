@@ -482,8 +482,8 @@ class InventoryValuationReport(models.Model):
     lot_id = fields.Many2one('stock.lot', string='Lote', readonly=True)
     quantity = fields.Float(string='Cantidad Disponible', readonly=True)
     reserved_quantity = fields.Float(string='Cantidad Reservada', readonly=True)
-    unit_value = fields.Float(string='Precio Promedio Unitario', compute='_compute_unit_value', store=True, readonly=True)
-    total_valuation = fields.Float(string='Valor Total Valorizado', compute='_compute_total_valuation', store=True, readonly=True)
+    unit_value = fields.Float(string='Precio Promedio Unitario', store=True, readonly=True)
+    total_valuation = fields.Float(string='Valor Total Valorizado',  store=True, readonly=True)
     layer_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Valorización)', readonly=True)
     quant_account_move_id = fields.Many2one('account.move', string='Asiento Contable (Quant)', readonly=True)
     stock_move_date = fields.Datetime(string='Fecha del Movimiento', readonly=True)
@@ -502,29 +502,29 @@ class InventoryValuationReport(models.Model):
         for record in self:
             record.valuation_account_id = record.product_id.categ_id.property_stock_valuation_account_id
 
-    @api.depends('product_id')
-    def _compute_unit_value(self):
-        """
-        Cálculo del valor unitario basado directamente en el costo estándar del producto.
-        """
-        for record in self:
-            if record.product_id:
-                # Tomar siempre el costo estándar del producto
-                record.unit_value = record.product_id.standard_price or 0.0
-            else:
-                # Si no hay producto, el valor unitario es 0
-                record.unit_value = 0.0
+    # @api.depends('product_id')
+    # def _compute_unit_value(self):
+    #     """
+    #     Cálculo del valor unitario basado directamente en el costo estándar del producto.
+    #     """
+    #     for record in self:
+    #         if record.product_id:
+    #             # Tomar siempre el costo estándar del producto
+    #             record.unit_value = record.product_id.standard_price or 0.0
+    #         else:
+    #             # Si no hay producto, el valor unitario es 0
+    #             record.unit_value = 0.0
 
 
 
-    @api.depends('unit_value', 'quantity')
-    def _compute_total_valuation(self):
-        """
-        Cálculo del valor total como cantidad disponible * valor unitario.
-        """
-        for record in self:
-            # Calcular el valor total sólo si la cantidad es positiva
-            record.total_valuation = record.unit_value * record.quantity if record.quantity > 0 else 0.0
+    # @api.depends('unit_value', 'quantity')
+    # def _compute_total_valuation(self):
+    #     """
+    #     Cálculo del valor total como cantidad disponible * valor unitario.
+    #     """
+    #     for record in self:
+    #         # Calcular el valor total sólo si la cantidad es positiva
+    #         record.total_valuation = record.unit_value * record.quantity if record.quantity > 0 else 0.0
 
 
     # @api.depends('layer_account_move_id', 'product_id')
@@ -632,7 +632,6 @@ class InventoryValuationReport(models.Model):
             offset += batch_size
 
 
-    #version orm correginda precio unitario
     def generate_data_by_orm(self, report_date):
         """
         Genera datos del informe utilizando el ORM, procesando en lotes para mayor eficiencia.
@@ -673,12 +672,12 @@ class InventoryValuationReport(models.Model):
                     ], limit=1, order='date desc')
 
                     # Calcular el precio unitario
-                    unit_value = product.standard_price  # Valor predeterminado
-                    if valuation_layer:
-                        unit_value = valuation_layer.unit_cost or product.standard_price
+                    unit_value = product.standard_price  # Usar costo estándar por defecto
+                    if valuation_layer and valuation_layer.unit_cost:
+                        unit_value = valuation_layer.unit_cost
 
-                    # Verificar que se haya asignado un valor unitario válido
-                    unit_value = unit_value if unit_value else 0.0
+                    # Asegurar que el unit_value no sea nulo o inválido
+                    unit_value = unit_value or 0.0
 
                     # Crear un diccionario con los datos del registro
                     records_to_create.append({
@@ -706,8 +705,6 @@ class InventoryValuationReport(models.Model):
 
             # Progresar en el log para grandes volúmenes de datos
             _logger.info("Processed batch %s/%s", offset + batch_size, total_products)
-
-
 
 
 
