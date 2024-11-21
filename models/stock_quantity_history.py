@@ -502,23 +502,19 @@ class InventoryValuationReport(models.Model):
         for record in self:
             record.valuation_account_id = record.product_id.categ_id.property_stock_valuation_account_id
 
-    @api.depends('product_id', 'location_id')
+    @api.depends('product_id')
     def _compute_unit_value(self):
         """
-        Cálculo del valor unitario basado en el precio promedio ponderado o el costo estándar.
+        Cálculo del valor unitario basado directamente en el costo estándar del producto.
         """
         for record in self:
             if record.product_id:
-                # Intentar obtener el costo promedio ponderado del último movimiento
-                valuation_layer = self.env['stock.valuation.layer'].search([
-                    ('product_id', '=', record.product_id.id),
-                    ('create_date', '<=', record.valuation_date)
-                ], order='create_date desc', limit=1)
-
-                # Usar el precio del valuation_layer o el costo estándar
-                record.unit_value = valuation_layer.unit_cost if valuation_layer else record.product_id.standard_price
+                # Tomar siempre el costo estándar del producto
+                record.unit_value = record.product_id.standard_price or 0.0
             else:
+                # Si no hay producto, el valor unitario es 0
                 record.unit_value = 0.0
+
 
 
     @api.depends('unit_value', 'quantity')
@@ -527,6 +523,7 @@ class InventoryValuationReport(models.Model):
         Cálculo del valor total como cantidad disponible * valor unitario.
         """
         for record in self:
+            # Calcular el valor total sólo si la cantidad es positiva
             record.total_valuation = record.unit_value * record.quantity if record.quantity > 0 else 0.0
 
 
