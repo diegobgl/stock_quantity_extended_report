@@ -672,12 +672,12 @@ class InventoryValuationReport(models.Model):
                     ], limit=1, order='date desc')
 
                     # # Calcular el precio unitario
-                    # unit_value = product.standard_price  # Usar costo estándar por defecto
-                    # if valuation_layer and valuation_layer.unit_cost:
-                    #     unit_value = valuation_layer.unit_cost
+                    unit_value = product.standard_price  # Usar costo estándar por defecto
+                    if valuation_layer and valuation_layer.unit_cost:
+                        unit_value = valuation_layer.unit_cost
 
-                    # Asegurar que el unit_value no sea nulo o inválido
-               #     unit_value = unit_value or 0.0
+                    #Asegurar que el unit_value no sea nulo o inválido
+                    unit_value = unit_value or 0.0
 
                     # Crear un diccionario con los datos del registro
                     records_to_create.append({
@@ -687,8 +687,8 @@ class InventoryValuationReport(models.Model):
                         'lot_id': quant.lot_id.id if quant.lot_id else None,
                         'quantity': quant.quantity,
                         'reserved_quantity': quant.reserved_quantity,
-                    #    'unit_value': unit_value,
-                    #    'total_valuation': unit_value * quant.quantity,  # Calcular el total
+                        'unit_value': unit_value,
+                        'total_valuation': unit_value * quant.quantity,  # Calcular el total
                         'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
                         'stock_move_date': last_move.date if last_move else None,
                         'move_reference': last_move.reference if last_move else None,
