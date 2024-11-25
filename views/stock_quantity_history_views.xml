@@ -123,7 +123,7 @@
                     <field name="unit_value"/>
                     <field name="total_valuation"/>
                     <field name="layer_account_move_id"/>
-                    <field name="quant_account_move_id"/>
+                    <!--field name="quant_account_move_id"/-->
                     <field name="stock_move_date"/>
                     <field name="move_reference"/>
                     <field name="account_move_id"/>
