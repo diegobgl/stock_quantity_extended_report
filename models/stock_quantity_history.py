@@ -501,20 +501,22 @@ class InventoryValuationReport(models.Model):
     def _compute_valuation_account(self):
         for record in self:
             record.valuation_account_id = record.product_id.categ_id.property_stock_valuation_account_id
-
+   
     @api.depends('product_id')
     def _compute_unit_value(self):
         """
         Cálculo del valor unitario basado directamente en el costo estándar del producto.
+        Fuerza la obtención del precio desde `product.product` o `product.template`.
         """
         for record in self:
             if record.product_id:
-                # Tomar siempre el costo estándar del producto
-                record.unit_value = record.product_id.standard_price or 0.0
+                # Forzar la obtención del costo estándar desde el modelo del producto
+                product = self.env['product.product'].browse(record.product_id.id)
+                record.unit_value = product.standard_price or 0.0
             else:
-                # Si no hay producto, el valor unitario es 0
+                # Si no hay producto, generar una advertencia en los logs
+                _logger.warning("El registro %s no tiene un producto asociado.", record.id)
                 record.unit_value = 0.0
-
 
 
     @api.depends('unit_value', 'quantity')
@@ -523,8 +525,22 @@ class InventoryValuationReport(models.Model):
         Cálculo del valor total como cantidad disponible * valor unitario.
         """
         for record in self:
-            # Calcular el valor total sólo si la cantidad es positiva
-            record.total_valuation = record.unit_value * record.quantity if record.quantity > 0 else 0.0
+            # Validar que haya un valor unitario y cantidad válida antes de calcular
+            if record.unit_value > 0 and record.quantity > 0:
+                record.total_valuation = record.unit_value * record.quantity
+            else:
+                # Registrar advertencia en los logs si no se puede calcular
+                if not record.unit_value:
+                    _logger.warning(
+                        "No se pudo calcular la valoración total para el producto %s debido a un valor unitario faltante.",
+                        record.product_id.display_name if record.product_id else "Desconocido"
+                    )
+                if not record.quantity:
+                    _logger.warning(
+                        "No se pudo calcular la valoración total para el producto %s debido a una cantidad faltante.",
+                        record.product_id.display_name if record.product_id else "Desconocido"
+                    )
+                record.total_valuation = 0.0
 
 
     # @api.depends('layer_account_move_id', 'product_id')
