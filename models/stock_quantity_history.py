@@ -671,13 +671,11 @@ class InventoryValuationReport(models.Model):
                         ('date', '<=', report_date)
                     ], limit=1, order='date desc')
 
-                    # # Calcular el precio unitario
-                    unit_value = product.standard_price  # Usar costo estándar por defecto
-                    if valuation_layer and valuation_layer.unit_cost:
-                        unit_value = valuation_layer.unit_cost
+                    # Calcular el precio unitario
+                    unit_value = valuation_layer.unit_cost if valuation_layer and valuation_layer.unit_cost else product.standard_price or 0.0
 
-                    #Asegurar que el unit_value no sea nulo o inválido
-                    unit_value = unit_value or 0.0
+                    # Log para verificar los valores obtenidos
+                    _logger.info("Processed Product: %s, Unit Value: %s", product.display_name, unit_value)
 
                     # Crear un diccionario con los datos del registro
                     records_to_create.append({
