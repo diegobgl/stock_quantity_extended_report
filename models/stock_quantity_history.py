@@ -672,7 +672,7 @@ class InventoryValuationReport(models.Model):
                     ], limit=1, order='date desc')
 
                     # Calcular el precio unitario
-                    unit_value = valuation_layer.unit_cost if valuation_layer and valuation_layer.unit_cost else product.standard_price or 0.0
+                    unit_value = valuation_layer.unit_cost if valuation_layer and valuation_layer.unit_cost else product.standard_price 
 
                     # Log para verificar los valores obtenidos
                     _logger.info("Processed Product: %s, Unit Value: %s", product.display_name, unit_value)
