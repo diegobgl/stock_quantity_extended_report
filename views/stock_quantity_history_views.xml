@@ -150,7 +150,7 @@
         <record id="action_inventory_valuation_report" model="ir.actions.act_window">
             <field name="name">Reporte de Valorización de Inventario</field>
             <field name="res_model">inventory.valuation.report</field>
-            <field name="view_mode">tree,form,pivot</field>
+            <field name="view_mode">tree,form</field>
         </record>
 
         <menuitem id="menu_inventory_valuation_wizard" name="Generar Reporte de Valorización"
