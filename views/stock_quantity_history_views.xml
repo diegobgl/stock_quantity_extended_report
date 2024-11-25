@@ -119,7 +119,7 @@
                     <field name="location_id" groupby="1"/>
                     <field name="lot_id"/>
                     <field name="quantity"/>
-                    <field name="reserved_quantity"/>
+                    <!--field name="reserved_quantity"/-->
                     <field name="unit_value"/>
                     <field name="total_valuation"/>
                     <field name="layer_account_move_id"/>
