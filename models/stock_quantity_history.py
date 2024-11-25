@@ -550,86 +550,86 @@ class InventoryValuationReport(models.Model):
     #     for record in self:
     #         record.total_valuation = record.quantity * record.unit_value
             
-    def generate_data(self, report_date):
-        """
-        Genera datos del informe utilizando SQL para optimizar el rendimiento.
-        Los datos se procesan en lotes para evitar problemas de memoria.
-        """
-        # Limpiar datos anteriores
-        self.env.cr.execute("DELETE FROM inventory_valuation_report")
+    # def generate_data(self, report_date):
+    #     """
+    #     Genera datos del informe utilizando SQL para optimizar el rendimiento.
+    #     Los datos se procesan en lotes para evitar problemas de memoria.
+    #     """
+    #     # Limpiar datos anteriores
+    #     self.env.cr.execute("DELETE FROM inventory_valuation_report")
 
-        # Configuración de la consulta base
-        base_query = """
-            SELECT
-                quant.product_id AS product_id,
-                quant.location_id AS location_id,
-                quant.lot_id AS lot_id,
-                quant.quantity AS quantity,
-                quant.reserved_quantity AS reserved_quantity,
-                valuation.account_move_id AS layer_account_move_id,
-                move.date AS stock_move_date,
-                move.reference AS move_reference
-            FROM
-                stock_quant AS quant
-            LEFT JOIN
-                stock_valuation_layer AS valuation
-            ON
-                quant.product_id = valuation.product_id
-                AND quant.location_id = valuation.location_id
-                AND valuation.create_date <= %s
-            LEFT JOIN
-                stock_move AS move
-            ON
-                move.product_id = quant.product_id
-                AND move.state = 'done'
-                AND move.date <= %s
-            WHERE
-                quant.quantity > 0
-            LIMIT %s OFFSET %s
-        """
+    #     # Configuración de la consulta base
+    #     base_query = """
+    #         SELECT
+    #             quant.product_id AS product_id,
+    #             quant.location_id AS location_id,
+    #             quant.lot_id AS lot_id,
+    #             quant.quantity AS quantity,
+    #             quant.reserved_quantity AS reserved_quantity,
+    #             valuation.account_move_id AS layer_account_move_id,
+    #             move.date AS stock_move_date,
+    #             move.reference AS move_reference
+    #         FROM
+    #             stock_quant AS quant
+    #         LEFT JOIN
+    #             stock_valuation_layer AS valuation
+    #         ON
+    #             quant.product_id = valuation.product_id
+    #             AND quant.location_id = valuation.location_id
+    #             AND valuation.create_date <= %s
+    #         LEFT JOIN
+    #             stock_move AS move
+    #         ON
+    #             move.product_id = quant.product_id
+    #             AND move.state = 'done'
+    #             AND move.date <= %s
+    #         WHERE
+    #             quant.quantity > 0
+    #         LIMIT %s OFFSET %s
+    #     """
 
-        # Configuración de parámetros
-        batch_size = 1000
-        offset = 0
-        insert_batch_size = 500
+    #     # Configuración de parámetros
+    #     batch_size = 1000
+    #     offset = 0
+    #     insert_batch_size = 500
 
-        while True:
-            # Obtener un lote de datos
-            self.env.cr.execute(base_query, (report_date, report_date, batch_size, offset))
-            records = self.env.cr.dictfetchall()
+    #     while True:
+    #         # Obtener un lote de datos
+    #         self.env.cr.execute(base_query, (report_date, report_date, batch_size, offset))
+    #         records = self.env.cr.dictfetchall()
 
-            if not records:
-                break  # Salir del bucle si no hay más datos
+    #         if not records:
+    #             break  # Salir del bucle si no hay más datos
 
-            insert_values = []
-            for record in records:
-                insert_values.append({
-                    'valuation_date': report_date,
-                    'product_id': record['product_id'],
-                    'location_id': record['location_id'],
-                    'lot_id': record['lot_id'],
-                    'quantity': record['quantity'],
-                    'reserved_quantity': record['reserved_quantity'],
-                    'layer_account_move_id': record.get('layer_account_move_id', False),  # Manejo de clave ausente
-                    'stock_move_date': record.get('stock_move_date', False),
-                    'move_reference': record.get('move_reference', ''),
-                    'create_uid': self.env.uid,
-                    'create_date': fields.Datetime.now(),
-                    'write_uid': self.env.uid,
-                    'write_date': fields.Datetime.now(),
-                })
+    #         insert_values = []
+    #         for record in records:
+    #             insert_values.append({
+    #                 'valuation_date': report_date,
+    #                 'product_id': record['product_id'],
+    #                 'location_id': record['location_id'],
+    #                 'lot_id': record['lot_id'],
+    #                 'quantity': record['quantity'],
+    #                 'reserved_quantity': record['reserved_quantity'],
+    #                 'layer_account_move_id': record.get('layer_account_move_id', False),  # Manejo de clave ausente
+    #                 'stock_move_date': record.get('stock_move_date', False),
+    #                 'move_reference': record.get('move_reference', ''),
+    #                 'create_uid': self.env.uid,
+    #                 'create_date': fields.Datetime.now(),
+    #                 'write_uid': self.env.uid,
+    #                 'write_date': fields.Datetime.now(),
+    #             })
 
-                # Inserción por lotes
-                if len(insert_values) >= insert_batch_size:
-                    self.env['inventory.valuation.report'].create(insert_values)
-                    insert_values = []
+    #             # Inserción por lotes
+    #             if len(insert_values) >= insert_batch_size:
+    #                 self.env['inventory.valuation.report'].create(insert_values)
+    #                 insert_values = []
 
-            # Insertar cualquier registro restante en el lote
-            if insert_values:
-                self.env['inventory.valuation.report'].create(insert_values)
+    #         # Insertar cualquier registro restante en el lote
+    #         if insert_values:
+    #             self.env['inventory.valuation.report'].create(insert_values)
 
-            # Incrementar el offset para el siguiente lote
-            offset += batch_size
+    #         # Incrementar el offset para el siguiente lote
+    #         offset += batch_size
 
 
     def generate_data_by_orm(self, report_date):
