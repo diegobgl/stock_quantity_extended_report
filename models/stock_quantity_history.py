@@ -550,7 +550,6 @@ class InventoryValuationReport(models.Model):
         Genera datos del informe utilizando el ORM, procesando en lotes para mayor eficiencia.
         Incluye información de cuentas contables, últimos movimientos y valores relacionados.
         """
-
         # Eliminar registros previos para evitar duplicados
         self.search([]).unlink()
 
@@ -580,10 +579,13 @@ class InventoryValuationReport(models.Model):
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', product.id),
                     ('quantity', '>', 0),
-                    ('location_id.usage', 'in', ['internal', 'transit']),  # Filtrar ubicaciones válidas
-                    ('location_id.complete_name', 'not in', excluded_location_names)  # Excluir ubicaciones por nombre completo
+                    ('location_id.usage', 'in', ['internal', 'transit'])  # Filtrar ubicaciones válidas
                 ])
                 for quant in quants:
+                    # Validar si la ubicación debe ser excluida
+                    if quant.location_id.complete_name in excluded_location_names:
+                        continue  # Saltar este registro
+                    
                     # Buscar información relacionada
                     valuation_layer = self.env['stock.valuation.layer'].search([
                         ('product_id', '=', quant.product_id.id),
@@ -623,6 +625,12 @@ class InventoryValuationReport(models.Model):
                         'write_uid': self.env.uid,
                         'write_date': fields.Datetime.now(),
                     })
+
+            # Validar registros a insertar para excluir ubicaciones
+            records_to_create = [
+                record for record in records_to_create 
+                if self.env['stock.location'].browse(record['location_id']).complete_name not in excluded_location_names
+            ]
 
             # Insertar los registros en lotes
             if records_to_create:
