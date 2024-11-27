@@ -542,6 +542,9 @@ class InventoryValuationReport(models.Model):
                     )
                 record.total_valuation = 0.0
 
+
+
+
     def generate_data_by_orm(self, report_date):
         """
         Genera datos del informe utilizando el ORM, procesando en lotes para mayor eficiencia.
@@ -558,7 +561,10 @@ class InventoryValuationReport(models.Model):
         batches = range(0, total_products, batch_size)
 
         # IDs de las ubicaciones de tránsito a excluir
-        excluded_location_ids = [id_ubicacion_1, id_ubicacion_2]  # Sustituye con los IDs reales de las ubicaciones a excluir
+        excluded_location_ids = self.env['stock.location'].search([
+            ('usage', '=', 'transit'),  # Solo ubicaciones de tránsito
+            ('id', 'in', [13, 3530, 3532, 3531, 3529, 3528])  # IDs específicos a excluir
+        ]).ids
 
         for offset in batches:
             # Obtener un lote de productos
@@ -570,8 +576,8 @@ class InventoryValuationReport(models.Model):
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', product.id),
                     ('quantity', '>', 0),
-                    ('location_id.usage', 'in', ['internal', 'transit']),  # Solo ubicaciones internas y de tránsito
-                    ('location_id.id', 'not in', excluded_location_ids),  # Excluir ubicaciones específicas de tránsito
+                    ('location_id.usage', 'in', ['internal', 'transit']),  # Solo internas y tránsito
+                    ('location_id.id', 'not in', excluded_location_ids),  # Excluir ubicaciones específicas
                 ])
                 for quant in quants:
                     # Buscar información relacionada
@@ -626,6 +632,7 @@ class InventoryValuationReport(models.Model):
 
             # Progresar en el log para grandes volúmenes de datos
             _logger.info("Processed batch %s/%s", offset + batch_size, total_products)
+
 
 
 
