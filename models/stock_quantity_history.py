@@ -643,57 +643,56 @@ class InventoryValuationReport(models.Model):
 
 
     def generate_data_by_account_moves(self, report_date):
-        """
-        Genera datos del informe basándose en los asientos contables y sus relaciones.
-        Considera movimientos negativos y positivos, asegurando cuadratura.
-        """
+        _logger.info("Iniciando la generación de datos de valuation report para la fecha: %s", report_date)
+
         # Limpiar datos previos
         self.search([]).unlink()
 
-        # Obtener líneas de asientos contables validados relacionados con inventario
+        # Obtener líneas de asientos contables
         account_move_lines = self.env['account.move.line'].search([
-            ('move_id.state', '=', 'posted'),  # Solo asientos contables validados
-            ('product_id', '!=', False),  # Solo líneas asociadas a productos
-            ('date', '<=', report_date)  # Hasta la fecha seleccionada
+            ('move_id.state', '=', 'posted'),
+            ('product_id', '!=', False),
+            ('date', '<=', report_date)
         ])
+        _logger.info("Se encontraron %s líneas de asientos contables para procesar.", len(account_move_lines))
 
         records_to_create = []
 
         for line in account_move_lines:
-            # Relación con stock.valuation.layer
             valuation_layer = self.env['stock.valuation.layer'].search([
                 ('account_move_id', '=', line.move_id.id),
                 ('product_id', '=', line.product_id.id)
             ], limit=1)
 
-            # Relación con stock.move
             stock_move = valuation_layer.stock_move_id if valuation_layer else None
 
-            # Ubicación basada en el movimiento (origen/destino según el signo del asiento)
             location = None
             if stock_move:
                 location = stock_move.location_dest_id if line.debit > 0 else stock_move.location_id
 
-            # Si no hay una ubicación válida, asignar valores predeterminados
             location_id = location.id if location and location.usage in ['internal', 'transit'] else None
 
-            # Crear el registro incluso si faltan datos
             records_to_create.append({
                 'valuation_date': report_date,
                 'product_id': line.product_id.id if line.product_id else None,
                 'location_id': location_id,
-                'quantity': line.quantity if line.quantity else 0.0,  # Valor predeterminado
-                'unit_value': line.price_unit if line.price_unit else 0.0,  # Valor predeterminado
-                'total_valuation': line.debit - line.credit,  # Calcular basado en débitos y créditos
+                'quantity': line.quantity if line.quantity else 0.0,
+                'unit_value': line.price_unit if line.price_unit else 0.0,
+                'total_valuation': line.debit - line.credit,
                 'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
                 'stock_move_date': stock_move.date if stock_move else None,
                 'move_reference': stock_move.reference if stock_move else "No Reference",
                 'account_move_id': line.move_id.id,
-                'create_uid': self.env.uid,
-                'create_date': fields.Datetime.now(),
-                'write_uid': self.env.uid,
-                'write_date': fields.Datetime.now(),
             })
+
+        _logger.info("Se generaron %s registros para crear en la base de datos.", len(records_to_create))
+
+        batch_size = 500
+        for i in range(0, len(records_to_create), batch_size):
+            _logger.info("Creando un lote de %s registros.", len(records_to_create[i:i + batch_size]))
+            self.create(records_to_create[i:i + batch_size])
+
+        _logger.info("Reporte generado correctamente.")
 
 
 
