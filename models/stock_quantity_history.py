@@ -674,24 +674,26 @@ class InventoryValuationReport(models.Model):
             if stock_move:
                 location = stock_move.location_dest_id if line.debit > 0 else stock_move.location_id
 
-            # Verificar que la ubicación sea válida
-            if location and location.usage in ['internal', 'transit']:
-                records_to_create.append({
-                    'valuation_date': report_date,
-                    'product_id': line.product_id.id,
-                    'location_id': location.id,
-                    'quantity': line.quantity,  # Usar cantidad del asiento contable
-                    'unit_value': line.price_unit,  # Usar precio unitario del asiento contable
-                    'total_valuation': line.debit - line.credit,  # Calcular basado en débitos y créditos
-                    'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
-                    'stock_move_date': stock_move.date if stock_move else None,
-                    'move_reference': stock_move.reference if stock_move else None,
-                    'account_move_id': line.move_id.id,
-                    'create_uid': self.env.uid,
-                    'create_date': fields.Datetime.now(),
-                    'write_uid': self.env.uid,
-                    'write_date': fields.Datetime.now(),
-                })
+            # Si no hay una ubicación válida, asignar valores predeterminados
+            location_id = location.id if location and location.usage in ['internal', 'transit'] else None
+
+            # Crear el registro incluso si faltan datos
+            records_to_create.append({
+                'valuation_date': report_date,
+                'product_id': line.product_id.id if line.product_id else None,
+                'location_id': location_id,
+                'quantity': line.quantity if line.quantity else 0.0,  # Valor predeterminado
+                'unit_value': line.price_unit if line.price_unit else 0.0,  # Valor predeterminado
+                'total_valuation': line.debit - line.credit,  # Calcular basado en débitos y créditos
+                'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
+                'stock_move_date': stock_move.date if stock_move else None,
+                'move_reference': stock_move.reference if stock_move else "No Reference",
+                'account_move_id': line.move_id.id,
+                'create_uid': self.env.uid,
+                'create_date': fields.Datetime.now(),
+                'write_uid': self.env.uid,
+                'write_date': fields.Datetime.now(),
+            })
 
 
 
