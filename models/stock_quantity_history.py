@@ -670,7 +670,9 @@ class InventoryValuationReport(models.Model):
             stock_move = valuation_layer.stock_move_id if valuation_layer else None
 
             # Ubicación basada en el movimiento (origen/destino según el signo del asiento)
-            location = stock_move.location_dest_id if line.debit > 0 else stock_move.location_id if stock_move else None
+            location = None
+            if stock_move:
+                location = stock_move.location_dest_id if line.debit > 0 else stock_move.location_id
 
             # Verificar que la ubicación sea válida
             if location and location.usage in ['internal', 'transit']:
@@ -690,13 +692,6 @@ class InventoryValuationReport(models.Model):
                     'write_uid': self.env.uid,
                     'write_date': fields.Datetime.now(),
                 })
-
-        # Crear registros en lotes
-        batch_size = 500
-        for i in range(0, len(records_to_create), batch_size):
-            self.create(records_to_create[i:i + batch_size])
-
-        _logger.info("Reporte generado correctamente con base en los asientos contables validados.")
 
 
 
