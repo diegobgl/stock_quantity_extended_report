@@ -697,6 +697,80 @@ class InventoryValuationReport(models.Model):
         _logger.info("Reporte generado correctamente.")
 
 
+    def generate_data_with_stock_adjustments(self, report_date):
+        """
+        Genera registros teniendo en cuenta movimientos de stock negativos con valorizaciones positivas.
+        """
+
+        # Limpiar datos previos
+        self.search([]).unlink()
+
+        # Buscar líneas contables relacionadas con movimientos de inventario
+        account_move_lines = self.env['account.move.line'].search([
+            ('move_id.state', '=', 'posted'),  # Asientos validados
+            ('product_id', '!=', False),      # Con productos relacionados
+            ('date', '<=', report_date)       # Hasta la fecha seleccionada
+        ])
+        _logger.info("Se encontraron %s líneas contables para procesar.", len(account_move_lines))
+
+        records_to_create = []
+
+        for line in account_move_lines:
+            # Relacionar con stock.valuation.layer y stock.move
+            valuation_layer = self.env['stock.valuation.layer'].search([
+                ('account_move_id', '=', line.move_id.id),
+                ('product_id', '=', line.product_id.id)
+            ], limit=1)
+
+            stock_move = valuation_layer.stock_move_id if valuation_layer else None
+
+            if not stock_move:
+                _logger.warning("No se encontró stock.move para account.move.line ID: %s", line.id)
+                continue
+
+            # Determinar si el movimiento es entrante o saliente
+            is_incoming = stock_move.location_dest_id.usage in ['internal', 'transit']
+            is_outgoing = stock_move.location_id.usage in ['internal', 'transit']
+
+            # Calcular el signo basado en el movimiento de inventario
+            valuation_sign = 1  # Por defecto positivo
+            if is_outgoing and line.debit > 0:
+                valuation_sign = -1  # Si es salida pero contablemente es positivo, debe restar
+
+            # Calcular el valor unitario (usando el costo estándar o la capa de valoración)
+            unit_value = line.product_id.standard_price
+            if valuation_layer and valuation_layer.unit_cost:
+                unit_value = valuation_layer.unit_cost
+            unit_value = unit_value or 0.0
+
+            # Calcular el total considerando el signo ajustado
+            total_valuation = valuation_sign * unit_value * (line.quantity if line.quantity else 0.0)
+
+            # Crear el registro
+            records_to_create.append({
+                'valuation_date': report_date,
+                'product_id': line.product_id.id,
+                'location_id': stock_move.location_dest_id.id if is_incoming else stock_move.location_id.id,
+                'quantity': line.quantity if line.quantity else 0.0,
+                'unit_value': unit_value,
+                'total_valuation': total_valuation,
+                'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
+                'stock_move_date': stock_move.date if stock_move else None,
+                'move_reference': stock_move.reference if stock_move else None,
+                'account_move_id': line.move_id.id,
+                'create_uid': self.env.uid,
+                'create_date': fields.Datetime.now(),
+                'write_uid': self.env.uid,
+                'write_date': fields.Datetime.now(),
+            })
+
+        # Insertar registros en lotes
+        batch_size = 500
+        for i in range(0, len(records_to_create), batch_size):
+            _logger.info("Creando lote de %s registros.", len(records_to_create[i:i + batch_size]))
+            self.create(records_to_create[i:i + batch_size])
+
+        _logger.info("Generación de datos completada con %s registros creados.", len(records_to_create))
 
 
 
@@ -747,6 +821,24 @@ class InventoryValuationWizard(models.TransientModel):
         if not self.report_date:
             raise UserError("Por favor, selecciona una fecha para generar el reporte.")
         self.env['inventory.valuation.report'].generate_data_by_account_moves(self.report_date)
+
+        # Devolver la vista del informe generado
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Reporte de Valorización de Inventario',
+            'res_model': 'inventory.valuation.report',
+            'view_mode': 'tree,form',
+            'context': {'default_report_date': self.report_date},
+        }
+    
+    
+    def generate_report_by_stock_move(self):
+        """
+        Genera el reporte basado en la fecha seleccionada.
+        """
+        if not self.report_date:
+            raise UserError("Por favor, selecciona una fecha para generar el reporte.")
+        self.env['inventory.valuation.report'].generate_data_with_stock_adjustments(self.report_date)
 
         # Devolver la vista del informe generado
         return {
