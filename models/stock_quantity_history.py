@@ -715,89 +715,6 @@ class InventoryValuationReport(models.Model):
 
 
 
-
-
-
-
-
-    # def generate_data_by_orm(self, report_date):
-    #     """
-    #     Genera datos del informe utilizando el ORM, procesando en lotes para mayor eficiencia.
-    #     Incluye información de cuentas contables, últimos movimientos y valores relacionados.
-    #     """
-    #     # Eliminar registros previos para evitar duplicados
-    #     self.search([]).unlink()
-
-    #     # Configuración para dividir la generación en lotes
-    #     batch_size = 500
-    #     products = self.env['product.product'].search([])  # Obtener todos los productos
-    #     total_products = len(products)
-    #     batches = range(0, total_products, batch_size)
-
-    #     for offset in batches:
-    #         # Obtener un lote de productos
-    #         product_batch = products[offset:offset + batch_size]
-            
-    #         # Preparar registros para insertar
-    #         records_to_create = []
-    #         for product in product_batch:
-    #             quants = self.env['stock.quant'].search([
-    #                 ('product_id', '=', product.id),
-    #                 ('quantity', '>', 0),
-    #                 ('location_id.usage', 'in', ['internal', 'transit'])  # Filtrar ubicaciones
-    #             ])
-    #             for quant in quants:
-    #                 # Buscar información relacionada
-    #                 valuation_layer = self.env['stock.valuation.layer'].search([
-    #                     ('product_id', '=', quant.product_id.id),
-    #                     ('create_date', '<=', report_date)
-    #                 ], limit=1, order='create_date desc')
-
-    #                 last_move = self.env['stock.move'].search([
-    #                     ('product_id', '=', quant.product_id.id),
-    #                     ('state', '=', 'done'),
-    #                     ('date', '<=', report_date)
-    #                 ], limit=1, order='date desc')
-
-    #                 # Calcular el precio unitario
-    #                 unit_value = valuation_layer.unit_cost if valuation_layer and valuation_layer.unit_cost else product.standard_price 
-
-    #                 # Log para verificar los valores obtenidos
-    #                 _logger.info("Processed Product: %s, Unit Value: %s", product.display_name, unit_value)
-
-    #                 # Crear un diccionario con los datos del registro
-    #                 records_to_create.append({
-    #                     'valuation_date': report_date,
-    #                     'product_id': quant.product_id.id,
-    #                     'location_id': quant.location_id.id,
-    #                     'lot_id': quant.lot_id.id if quant.lot_id else None,
-    #                     'quantity': quant.quantity,
-    #                     'reserved_quantity': quant.reserved_quantity,
-    #                     'unit_value': unit_value,
-    #                     'total_valuation': unit_value * quant.quantity,  # Calcular el total
-    #                     'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
-    #                     'stock_move_date': last_move.date if last_move else None,
-    #                     'move_reference': last_move.reference if last_move else None,
-    #                     'account_move_id': last_move.account_move_ids[:1].id if last_move else None,
-    #                     'create_uid': self.env.uid,
-    #                     'create_date': fields.Datetime.now(),
-    #                     'write_uid': self.env.uid,
-    #                     'write_date': fields.Datetime.now(),
-    #                 })
-
-    #         # Insertar los registros en lotes
-    #         if records_to_create:
-    #             self.create(records_to_create)
-
-    #         # Progresar en el log para grandes volúmenes de datos
-    #         _logger.info("Processed batch %s/%s", offset + batch_size, total_products)
-
-
-
-
-
-
-
 class InventoryValuationWizard(models.TransientModel):
     _name = 'inventory.valuation.wizard'
     _description = 'Wizard para Generar Reporte de Valorización'
@@ -838,3 +755,19 @@ class InventoryValuationWizard(models.TransientModel):
             'context': {'default_report_date': self.report_date},
         }
 
+    def generate_report_by_account(self):
+        """
+        Genera el reporte basado en la fecha seleccionada.
+        """
+        if not self.report_date:
+            raise UserError("Por favor, selecciona una fecha para generar el reporte.")
+        self.env['inventory.valuation.report'].generate_data_by_account_moves(self.report_date)
+
+        # Devolver la vista del informe generado
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Reporte de Valorización de Inventario',
+            'res_model': 'inventory.valuation.report',
+            'view_mode': 'tree,form',
+            'context': {'default_report_date': self.report_date},
+        }
