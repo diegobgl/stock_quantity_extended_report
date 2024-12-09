@@ -548,18 +548,19 @@ class InventoryValuationReport(models.Model):
     def generate_data_by_orm(self, report_date):
         """
         Genera datos del informe utilizando el ORM, procesando en lotes para mayor eficiencia.
-        Incluye información de cuentas contables, últimos movimientos y valores relacionados.
+        Procesa información de productos, ubicaciones y movimientos.
         """
-        # Eliminar registros previos para evitar duplicados
+
+        # Limpiar datos previos
         self.search([]).unlink()
 
-        # Configuración para dividir la generación en lotes
+        # Configuración para procesamiento en lotes
         batch_size = 500
-        products = self.env['product.product'].search([])  # Obtener todos los productos
+        products = self.env['product.product'].search([])
         total_products = len(products)
         batches = range(0, total_products, batch_size)
 
-        # Nombres completos de las sububicaciones a excluir
+        # Excluir ubicaciones específicas
         excluded_location_names = [
             "MALO/STOCK/MALO CD",
             "MALO/STOCK/MALO CORONEL",
@@ -570,23 +571,23 @@ class InventoryValuationReport(models.Model):
         ]
 
         for offset in batches:
-            # Obtener un lote de productos
+            # Procesar un lote de productos
             product_batch = products[offset:offset + batch_size]
-            
-            # Preparar registros para insertar
             records_to_create = []
+
             for product in product_batch:
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', product.id),
                     ('quantity', '>', 0),
-                    ('location_id.usage', 'in', ['internal', 'transit'])  # Filtrar ubicaciones válidas
+                    ('location_id.usage', 'in', ['internal', 'transit'])
                 ])
+
                 for quant in quants:
                     # Validar si la ubicación debe ser excluida
                     if quant.location_id.complete_name in excluded_location_names:
-                        continue  # Saltar este registro
-                    
-                    # Buscar información relacionada
+                        continue
+
+                    # Buscar capas de valoración y movimientos
                     valuation_layer = self.env['stock.valuation.layer'].search([
                         ('product_id', '=', quant.product_id.id),
                         ('create_date', '<=', report_date)
@@ -598,15 +599,13 @@ class InventoryValuationReport(models.Model):
                         ('date', '<=', report_date)
                     ], limit=1, order='date desc')
 
-                    # Calcular el precio unitario
+                    # Calcular valores predeterminados
                     unit_value = product.standard_price  # Usar costo estándar por defecto
                     if valuation_layer and valuation_layer.unit_cost:
                         unit_value = valuation_layer.unit_cost
+                    unit_value = unit_value or 0.0  # Evitar valores nulos
 
-                    # Asegurar que el unit_value no sea nulo o inválido
-                    unit_value = unit_value or 0.0
-
-                    # Crear un diccionario con los datos del registro
+                    # Crear un registro
                     records_to_create.append({
                         'valuation_date': report_date,
                         'product_id': quant.product_id.id,
@@ -615,10 +614,10 @@ class InventoryValuationReport(models.Model):
                         'quantity': quant.quantity,
                         'reserved_quantity': quant.reserved_quantity,
                         'unit_value': unit_value,
-                        'total_valuation': unit_value * quant.quantity,  # Calcular el total
+                        'total_valuation': unit_value * quant.quantity,
                         'layer_account_move_id': valuation_layer.account_move_id.id if valuation_layer else None,
                         'stock_move_date': last_move.date if last_move else None,
-                        'move_reference': last_move.reference if last_move else None,
+                        'move_reference': last_move.reference if last_move else "No Reference",
                         'account_move_id': last_move.account_move_ids[:1].id if last_move else None,
                         'create_uid': self.env.uid,
                         'create_date': fields.Datetime.now(),
@@ -626,18 +625,21 @@ class InventoryValuationReport(models.Model):
                         'write_date': fields.Datetime.now(),
                     })
 
-            # Validar registros a insertar para excluir ubicaciones
+            # Validar registros y excluir ubicaciones no deseadas
             records_to_create = [
-                record for record in records_to_create 
+                record for record in records_to_create
                 if self.env['stock.location'].browse(record['location_id']).complete_name not in excluded_location_names
             ]
 
-            # Insertar los registros en lotes
+            # Insertar registros en lotes
             if records_to_create:
                 self.create(records_to_create)
 
-            # Progresar en el log para grandes volúmenes de datos
-            _logger.info("Processed batch %s/%s", offset + batch_size, total_products)
+            # Progreso en los logs
+            _logger.info("Procesado lote %s/%s", offset + batch_size, total_products)
+
+        _logger.info("Generación de informe completada.")
+
 
 
 
