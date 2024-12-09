@@ -92,7 +92,8 @@
                     </group>
                     <footer>
                         <!--button string="Generar por sql" type="object" name="generate_report" class="btn-primary"/-->
-                        <button string="Generar por orm" type="object" name="generate_report_by_orm" class="btn-primary"/>
+                        <!--button string="Generar por orm" type="object" name="generate_report_by_orm" class="btn-primary"/-->
+                        <button string="Generar por account move" type="object" name="generate_data_by_account_moves" class="btn-primary"/>
                         <button string="Cancelar" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>

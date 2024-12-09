@@ -642,6 +642,75 @@ class InventoryValuationReport(models.Model):
 
 
 
+    def generate_data_by_account_moves(self, report_date):
+        """
+        Genera el reporte basado en los asientos contables validados.
+        Incluye cálculos para movimientos positivos y negativos.
+        """
+        # Eliminar registros previos para evitar duplicados
+        self.search([]).unlink()
+
+        # Obtener las cuentas contables de valorización del inventario
+        inventory_accounts = self.env['account.account'].search([
+            ('id', 'in', self.env['product.category'].search([]).mapped('property_stock_valuation_account_id.id'))
+        ])
+
+        # Configuración para procesar en lotes
+        batch_size = 500
+        move_lines = self.env['account.move.line'].search([
+            ('account_id', 'in', inventory_accounts.ids),  # Solo cuentas de inventario
+            ('move_id.state', '=', 'posted'),             # Solo asientos contables validados
+            ('date', '<=', report_date),                  # Movimientos hasta la fecha del reporte
+        ])
+
+        total_lines = len(move_lines)
+        batches = range(0, total_lines, batch_size)
+
+        for offset in batches:
+            # Obtener un lote de líneas contables
+            move_line_batch = move_lines[offset:offset + batch_size]
+
+            # Preparar registros para insertar
+            records_to_create = []
+            for line in move_line_batch:
+                product = line.product_id
+                if not product:
+                    continue  # Ignorar líneas sin producto
+
+                # Determinar la ubicación desde la línea contable (si aplica)
+                location = line.move_id.picking_id.location_dest_id if line.debit > 0 else line.move_id.picking_id.location_id
+
+                # Excluir ubicaciones no deseadas
+                if location and location.usage in ['production', 'inventory']:
+                    continue
+
+                # Determinar cantidad y valor
+                quantity = line.quantity or 0.0
+                unit_value = product.standard_price
+                total_valuation = unit_value * quantity
+
+                # Registrar el movimiento
+                records_to_create.append({
+                    'valuation_date': line.date,
+                    'product_id': product.id,
+                    'location_id': location.id if location else None,
+                    'lot_id': line.lot_id.id if line.lot_id else None,
+                    'quantity': quantity if line.debit > 0 else -quantity,
+                    'unit_value': unit_value,
+                    'total_valuation': total_valuation if line.debit > 0 else -total_valuation,
+                    'account_move_id': line.move_id.id,
+                    'create_uid': self.env.uid,
+                    'create_date': fields.Datetime.now(),
+                    'write_uid': self.env.uid,
+                    'write_date': fields.Datetime.now(),
+                })
+
+            # Insertar registros en lotes
+            if records_to_create:
+                self.create(records_to_create)
+
+            # Progresar en el log para grandes volúmenes de datos
+            _logger.info("Processed batch %s/%s", offset + batch_size, total_lines)
 
 
 
